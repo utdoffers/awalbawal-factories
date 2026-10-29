@@ -1,0 +1,46 @@
+########################################################################
+# 🎟️🖼️ بطاقاتُ الأكواد — WP-699 (2026-10-13)
+#
+# قراره بعد نقاش صور المنشورات: منشورُ الكود ينزل بصورة — صورةُ المتجر الرسمية (أو شعارُه)
+# داخل إطار «أول بأول» الفاتح + اسمُ المتجر + العرض + شريطُ الكود. التابلتُ يجيب صفحاتِ المتاجر،
+# وهذا المصنعُ يرسم ما تغيّرت بصمتُه ويودعه في النظام. لا ينشر شيئًا.
+# كلَّ ٦ ساعات (صورُ المتاجر تصل من التابلت على دفعات) · وبالدفع حين يتغيّر المصنعُ نفسُه.
+# 🔑 TT_BOT_KEY — نفسُ سرِّ مصنع المقاطع، ويرى أبوابَه المسمّاة فقط (cc/todo · cc/upload).
+########################################################################
+name: بطاقات الأكواد
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  push:
+    branches: [security/wp-204-clean]
+    paths:
+      - ".github/workflows/code-cards.yml"
+      - "tools/codecard/**"
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "تشغيلٌ جافّ (يرسم ولا يودع)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: code-cards
+  cancel-in-progress: false
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: تجهيز
+        run: |
+          pip install --quiet "Pillow>=10" cairosvg
+          python3 -c "from PIL import features; assert features.check('raqm'), 'لا raqm'; print('✅ raqm حاضر')"
+      - name: رسمٌ وإيداع
+        env:
+          TT_BOT_KEY: ${{ secrets.TT_BOT_KEY }}
+        run: |
+          cd tools/codecard
+          if [ "${{ inputs.dry }}" = "true" ]; then python3 run.py --dry; else python3 run.py; fi

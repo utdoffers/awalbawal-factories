@@ -1,0 +1,49 @@
+########################################################################
+# 🎬 مقاطعُ المنتجات — WP-684 (2026-10-12)
+#
+# قراره: «لازم كل شي يصير بدون تدخل مني». يدور مرّتين في اليوم فيملأ خانتَي تيك توك
+# (٢:٣٠ الظهر · ٩:٣٠ الليل) لليومين القادمين: نوعُ منتجٍ لم ينزل قريبًا ⇐ فيديو المنتج
+# الحقيقيّ من علي إكسبريس ⇐ جملةٌ تقول وش يسوي + شريطُ نون وكودُه ⇐ يودعه في النظام،
+# ونحلةُ تيك توك تنشره في موعده عبر Buffer. التفصيلُ في tools/ttproduct/run.py.
+#
+# ⏱️ 2026-10-13: دورتا 04:17Z و14:43Z المجدولتان تأخّرتا — هذا السطر يُطلقها بالدفع (push) · 17:26Z لخانة الليل بعد رجوع التابلت.
+# 🔑 السرُّ نفسُه الذي يستعمله مصنعُ الأكواد: TT_BOT_KEY — ولا يرى غيرَ أبوابه.
+########################################################################
+name: مقاطع المنتجات
+
+on:
+  schedule:
+    - cron: "17 4 * * *"     # 07:17 بالرياض — قبل خانة الظهر بوقتٍ واسع
+    - cron: "43 14 * * *"    # 17:43 بالرياض — يملأ ما بقي فاضيًا (ومنه خانةُ الليل)
+  push:
+    branches: [security/wp-204-clean]
+    paths:
+      - ".github/workflows/tt-product.yml"
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "تشغيلٌ جافّ (يرسم ولا يودع)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: tt-product
+  cancel-in-progress: false
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: تجهيز
+        run: |
+          bash tools/ci-apt.sh ffmpeg xvfb   # WP-881: بمهلةٍ وإعادة — كان يعلّق ١٣–٢١ دقيقة في apt-get update
+          pip install --quiet "Pillow>=10" numpy scipy
+          python3 -c "from PIL import features; assert features.check('raqm'), 'لا raqm'; print('✅ raqm حاضر')"
+      - name: صيدٌ ورسمٌ وإيداع
+        env:
+          TT_BOT_KEY: ${{ secrets.TT_BOT_KEY }}
+        run: |
+          cd tools/ttproduct
+          if [ "${{ inputs.dry }}" = "true" ]; then python3 run.py --dry; else python3 run.py; fi

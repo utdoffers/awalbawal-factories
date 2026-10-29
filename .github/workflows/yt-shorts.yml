@@ -1,0 +1,44 @@
+# ▶️ WP-878 — يوتيوب شورتس (قوله 2026-10-29 «مقطعين - يوتيوب مباشر - ما نحط علامه»)
+# مصنعُ مقاطع المنتجات نفسُه (tools/ttproduct) بوجهة يوتيوب: يسأل الخادمَ عن الخانات ⇐ يصطاد فيديو المنتج
+# ⇐ يرسمه 1080×1920 ⇐ يحجز النصَّ المحكوم ⇐ يرفعه ليوتيوب مباشرةً بموعده (publishAt) ⇐ يبلّغ الخادم.
+# مفتاحُ الرفع قصيرٌ (ساعة) يأخذه من الخادم (yt/token) بمفتاح المقاطع — لا سرَّ يوتيوب في GitHub.
+# الموعدُ الثابت يتأخّر ساعات (دفتر الفخاخ 26/10) ⇒ يرسم ليومين قادمين، والنبضةُ توقظه (workflow_dispatch) إن قربت خانةٌ فاضية.
+name: يوتيوب شورتس
+
+on:
+  schedule:
+    - cron: "41 3 * * *"     # 06:41 بالرياض (ويصل متأخّرًا ساعات — لا بأس: يرفع لخانات يومين)
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "تشغيلٌ جافّ (يرسم ولا يرفع)"
+        type: string
+        default: "false"
+      max:
+        description: "كم شورت في الدورة"
+        type: string
+        default: "2"
+
+concurrency:
+  group: yt-shorts
+  cancel-in-progress: false
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: تجهيز
+        run: |
+          bash tools/ci-apt.sh ffmpeg xvfb   # WP-881: بمهلةٍ وإعادة — كان يعلّق ١٣–٢١ دقيقة في apt-get update
+          pip install --quiet "Pillow>=10" numpy scipy
+          python3 -c "from PIL import features; assert features.check('raqm'), 'لا raqm'; print('✅ raqm حاضر')"
+      - name: صيدٌ ورسمٌ ورفعٌ ليوتيوب
+        env:
+          TT_BOT_KEY: ${{ secrets.TT_BOT_KEY }}
+          MAX: ${{ inputs.max || '2' }}
+          DRY: ${{ inputs.dry || 'false' }}
+        run: |
+          cd tools/ttproduct
+          if [ "$DRY" = "true" ]; then python3 run.py --to youtube --dry --max "$MAX"; else python3 run.py --to youtube --max "$MAX"; fi

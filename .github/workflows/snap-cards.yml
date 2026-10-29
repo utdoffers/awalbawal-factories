@@ -1,0 +1,47 @@
+########################################################################
+# 👻🖼️ ستوري سناب — WP-814 (2026-10-22)
+#
+# قراره بعد النماذج الثلاثة لكود سبورتر: «حلوووو جدا التصاميم الثلاث» ثمّ «ابني كل شي بشكل جذري».
+# الخادمُ يقرّر ماذا يُرسم لكلِّ خانة سناب قادمة (كود اليوم · من المتجر · سؤال جريء · عرض حي)،
+# وهذا المصنعُ يرسم ما تغيّرت بصمتُه ويودعه. لا ينشر شيئًا — النحلةُ تأخذ البطاقةَ وقتَ الخانة.
+# كلَّ ساعتين: خانةُ «عرض حي» تُحجز قبل موعدها بثلاث ساعات، فتجد بطاقتَها قبل أن يحين.
+# 🔑 TT_BOT_KEY — نفسُ سرِّ مصنع بطاقات الأكواد، ويرى أبوابَه المسمّاة فقط (snap/cards/todo · snap/cards/upload).
+########################################################################
+name: ستوري سناب
+
+on:
+  schedule:
+    - cron: "41 */2 * * *"
+  push:
+    branches: [security/wp-204-clean]
+    paths:
+      - ".github/workflows/snap-cards.yml"
+      - "tools/codecard/snap.py"
+      - "tools/codecard/snaprun.py"
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "تشغيلٌ جافّ (يرسم ولا يودع)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: snap-cards
+  cancel-in-progress: false
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: تجهيز
+        run: |
+          pip install --quiet "Pillow>=10" cairosvg
+          python3 -c "from PIL import features; assert features.check('raqm'), 'لا raqm'; print('✅ raqm حاضر')"
+      - name: رسمٌ وإيداع
+        env:
+          TT_BOT_KEY: ${{ secrets.TT_BOT_KEY }}
+        run: |
+          cd tools/codecard
+          if [ "${{ inputs.dry }}" = "true" ]; then python3 snaprun.py --dry; else python3 snaprun.py; fi

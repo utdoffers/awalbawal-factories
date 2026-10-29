@@ -1,0 +1,65 @@
+########################################################################
+# 🎬 مقاطعُ تيك توك — WP-084
+#
+# يدور كلَّ فجرٍ فيرسم مقاطعَ صفوفِ اليوم ويودعها في النظام، ثمّ تنشرها
+# نحلةُ تيك توك في مواعيدها. ولا يلمس كودَ التطبيق.
+#
+# 🕒 00:00 UTC = 03:00 بالرياض — وأوّلُ خانةٍ 10:30، فالفارقُ سبعُ ساعاتٍ
+#    ونصف. وجداولُ GitHub قد تتأخّر دقائقَ فالهامشُ واسعٌ عمدًا.
+#
+# 🔑 يحتاج ثلاثةَ أسرارٍ في إعدادات المستودع (Settings ← Secrets ← Actions):
+#      OS_USER · OS_PASS   ← نفسُ دخول لوحتك (ADMIN_USER/ADMIN_PASS)
+#    ولا يظهران في السجلّ: GitHub يحجبهما تلقائيًّا.
+########################################################################
+name: مقاطع تيك توك
+
+on:
+  # ⏸️ WP-684 (2026-10-12): قراره «١ وقف القديم» — قالبُ الأكواد القديم توقّف على تيك توك
+  #    (خاناتُه شِيلت من المقود)، فلا جدولةَ له. والتشغيلُ اليدويُّ باقٍ (لا حذفَ بلا إذن).
+  #    وكانت: "23 22 * * *" و"41 2 * * *" (WP-648).
+  workflow_dispatch:         # ولك تشغيلُه بيدك متى شئت
+    inputs:
+      dry:
+        description: "تشغيلٌ جافّ (يرسم ويفحص ولا يودع)"
+        type: boolean
+        default: false
+
+concurrency:                 # دورةٌ واحدةٌ في الوقت الواحد — لا إيداعٌ مزدوج
+  group: tt-video
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: تثبيت ffmpeg والخطِّ اللاتينيّ
+        run: |
+          bash tools/ci-apt.sh ffmpeg fonts-dejavu-core   # WP-881: بمهلةٍ وإعادة — كان يعلّق ١٣–٢١ دقيقة في apt-get update
+          # 🔤 الخطُّ اللاتينيُّ شرطٌ: خطُّ العلامة عربيٌّ بلا A–Z،
+          #    وبدونه يخرج الكودُ مربّعاتٍ فارغة (عطبُ 2026-08-11).
+          test -f /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+
+      - name: تثبيت مكتبات الرسم
+        run: pip install --quiet "Pillow>=10" fonttools
+
+      - name: التأكّد أنّ العربيّ يتشكّل
+        # بلا raqm يخرج النصُّ مقلوبًا مفكَّكَ الحروف — فنقف هنا لا على الشاشة
+        run: |
+          python3 -c "from PIL import features; assert features.check('raqm'), 'لا raqm'; print('✅ raqm حاضر')"
+
+      - name: رسمُ مقاطع اليوم وإيداعها
+        env:
+          # 🔑 WP-360: مفتاحُ المقاطع وحدَها أوّلًا؛ وOS_USER/OS_PASS احتياطٌ حتى تُحذفا من الأسرار
+          TT_BOT_KEY: ${{ secrets.TT_BOT_KEY }}
+          OS_USER: ${{ secrets.OS_USER }}
+          OS_PASS: ${{ secrets.OS_PASS }}
+        run: |
+          cd tools/ttvideo
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            python3 run.py --dry
+          else
+            python3 run.py
+          fi

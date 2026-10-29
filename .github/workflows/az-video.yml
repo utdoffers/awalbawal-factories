@@ -1,0 +1,44 @@
+########################################################################
+# 🎬 مقاطعُ صيدات أمازون لإكس — WP-781 (2026-10-20)
+#
+# قراره: «حط لي خطه عمل ومهام انت تبنيها وتنفذها ( نبدا في اكس )».
+# يوقظه الخادمُ حين يجد التابلتُ فيديو طوليًّا جديدًا في صفحة منتج (مرّةً كلَّ ٢٠ دقيقة على الأكثر)،
+# وثلاثُ دوراتٍ احتياطيّة في اليوم إن فات الإيقاظ. ينزّل 720×1280 من شبكة توزيع أمازون، يقصّ ١٠ ثوانٍ،
+# يضغطه تحت ~١ ميغا ويرفعه — ونحلةُ إكس تُخرج الصيدةَ به. التفصيلُ في tools/azvideo/run.py.
+# 🔑 السرُّ نفسُه: TT_BOT_KEY — ولا يرى غيرَ بابَي az/video/jobs و az/video/put.
+########################################################################
+name: مقاطع أمازون لإكس
+
+on:
+  schedule:
+    - cron: "23 6 * * *"     # 09:23 بالرياض
+    - cron: "23 12 * * *"    # 15:23
+    - cron: "23 18 * * *"    # 21:23
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "تشغيلٌ جافّ (يرسم ولا يرفع)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: az-video
+  cancel-in-progress: false
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: تجهيز
+        run: |
+          bash tools/ci-apt.sh ffmpeg   # WP-881: بمهلةٍ وإعادة — كان يعلّق ١٣–٢١ دقيقة في apt-get update
+          pip install --quiet "Pillow>=10"
+          python3 -c "from PIL import features; assert features.check('raqm'), 'لا raqm'; print('✅ raqm حاضر')"
+      - name: تنزيلٌ وقصٌّ ورفع
+        env:
+          TT_BOT_KEY: ${{ secrets.TT_BOT_KEY }}
+        run: |
+          cd tools/azvideo
+          if [ "${{ inputs.dry }}" = "true" ]; then python3 run.py --dry; else python3 run.py; fi

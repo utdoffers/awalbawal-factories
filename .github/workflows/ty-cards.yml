@@ -1,0 +1,47 @@
+########################################################################
+# 🖼️🟠 بطاقاتُ حملات ترينديول «قبل وبعد» — WP-732 مهمة ٨ (2026-10-16)
+#
+# قراره: «كل الماركات: صورة قبل وبعد من ترينديول». التابلتُ يقرأ منتجَ كلِّ حملة 13:00–15:59 رياضًا،
+# وهذا المصنعُ يرسم ما تغيّرت بصمتُه ويودعه — قبل منشور ٤ العصر. لا ينشر شيئًا.
+# تشغيلتان: 14:45 و15:25 رياضًا (11:45 و12:25 UTC) · وبالدفع حين يتغيّر المصنع · ويدويًّا.
+# 🔑 TT_BOT_KEY — نفسُ سرِّ مصنع البطاقات، ويرى أبوابَه المسمّاة فقط (tycamp/cards/todo · upload).
+########################################################################
+name: بطاقات حملات ترينديول
+
+on:
+  schedule:
+    - cron: "45 11 * * *"
+    - cron: "25 12 * * *"
+    - cron: "48 12 * * *"   # WP-732(٩): بعد نحلة 15:40 وقبل منشور 16:00 — إن غيّرت شيئًا يُرسم من جديد
+  push:
+    branches: [security/wp-204-clean]
+    paths:
+      - ".github/workflows/ty-cards.yml"
+      - "tools/codecard/tyrun.py"
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "تشغيلٌ جافّ (يرسم ولا يودع)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ty-cards
+  cancel-in-progress: false
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: تجهيز
+        run: |
+          pip install --quiet "Pillow>=10" cairosvg
+          python3 -c "from PIL import features; assert features.check('raqm'), 'لا raqm'; print('✅ raqm حاضر')"
+      - name: رسمٌ وإيداع
+        env:
+          TT_BOT_KEY: ${{ secrets.TT_BOT_KEY }}
+        run: |
+          cd tools/codecard
+          if [ "${{ inputs.dry }}" = "true" ]; then python3 tyrun.py --dry; else python3 tyrun.py; fi
