@@ -17,7 +17,7 @@ on:
       max:
         description: "كم شورت في الدورة"
         type: string
-        default: "2"
+        default: "6"
 
 concurrency:
   group: yt-shorts
@@ -37,7 +37,7 @@ jobs:
       - name: صيدٌ ورسمٌ ورفعٌ ليوتيوب
         env:
           TT_BOT_KEY: ${{ secrets.TT_BOT_KEY }}
-          MAX: ${{ inputs.max || '2' }}
+          MAX: ${{ inputs.max || '6' }}   # WP-931: ستّ خانات يوميًّا
           DRY: ${{ inputs.dry || 'false' }}
         run: |
           cd tools/ttproduct

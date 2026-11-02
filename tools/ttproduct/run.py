@@ -219,6 +219,40 @@ def render_yt(src, png, wav, out, wid, hei, dur):
     if r.returncode != 0 or not os.path.exists(out): return None, r.stderr.decode()[-300:]
     return out, None
 
+def yt_code_slot(a, slot, code, day, rnd):
+    """🎟️ WP-931: خانةُ «قائمة أكواد» أو «بطاقة متجر» — مادّتُها من الخادم، تُرسم هنا وتُرفع. يُرجع 1 إن رُفع."""
+    import hashlib, ytcodes
+    m, t = slot.get("material") or {}, slot.get("type")
+    tmp = tempfile.mkdtemp(prefix="ytc")
+    wav, out = os.path.join(tmp, "m.wav"), os.path.join(tmp, "out.mp4")
+    say(f"▶️ خانة يوتيوب {slot['day']} {slot['hm']} ← " + ("قائمة أكواد · " + str(m.get("cat") or "") if t == "codes" else "بطاقة " + str(m.get("store") or "")))
+    try:
+        subprocess.run([sys.executable, os.path.join(HERE, "music.py"), str(ytcodes.DUR), str(rnd.randint(1, 10**6)), wav], check=True, capture_output=True)
+        if t == "codes":
+            items = [{"store": "نون", "code": m.get("code") or code}] + list(m.get("items") or [])
+            path, err = ytcodes.frames_mp4(ytcodes.codes_frames(items, m.get("cat")), wav, out, tmp)
+            ckeys = [x["ckey"] for x in (m.get("items") or [])]
+        else:
+            path, err = ytcodes.still_mp4(ytcodes.card_jpg(m.get("fields") or {}), wav, out, tmp)
+            ckeys = [m.get("ckey")]
+    except Exception as e:
+        path, err = None, repr(e)[:200]
+    if not path: say("   ⚠️ تعذّر الرسم:", err); return 0
+    key = f"YS-{day}-{t}-" + hashlib.md5(str(slot["at"]).encode()).hexdigest()[:6]
+    if a.dry:
+        dd = os.environ.get("YT_DRY_OUT") or tempfile.gettempdir(); os.makedirs(dd, exist_ok=True)   # خارج المستودع (لا يُزامَن للمصانع)
+        keep = os.path.join(dd, key + ".mp4"); shutil.copy(path, keep)
+        say(f"   🧪 جافّ: {key} · {os.path.getsize(path)//1000}KB · {str(m.get('title') or '')[:90]}"); return 1
+    cl = api_post("/api/yt/claim", {"key": key, "type": t, "ckeys": ckeys, "at": slot["at"]})
+    if not cl.get("ok"): say("   ⚠️ الخادم ما حجز:", cl.get("why") or cl); return 0
+    try:
+        vid, ust = yt_upload(path, cl)
+    except Exception as e:
+        api_post("/api/yt/done", {"key": key, "why": str(e)[:280]}); say("   ⛔ تعذّر الرفع ليوتيوب:", e); return 0
+    api_post("/api/yt/done", {"key": key, "video_id": vid})
+    say(f"   ✅ رُفع: https://www.youtube.com/shorts/{vid} ({ust}) ← {cl.get('publish_at') or 'الآن'}")
+    return 1
+
 def main_youtube(a):
     global W, H
     W, H = 1080, 1920
@@ -237,13 +271,19 @@ def main_youtube(a):
     used_recent = {r.get("kind") for r in recent if str(r.get("slot_at") or "") >= cutoff}
     used_src = {str(r.get("src_id")) for r in recent}
     pool = [k for k in kinds if k["kind"] not in used_recent]
-    if not pool: say("⏸️ كلُّ الأنواع نزلت على يوتيوب خلال أيام الراحة — أضِف أنواعًا لـ kinds.json"); return
+    # 🔀 WP-931: خاناتُ الأكواد لا تحتاج أنواعًا — فخلوُّ الأنواع يوقف مقاطعَ المنتج وحدها لا الدورة
+    is_code = lambda s: s.get("type") in ("codes", "card") and s.get("material")
+    n_prod = sum(1 for s in free[: a.max] if not is_code(s))
+    if not pool and n_prod: say("⏸️ كلُّ الأنواع نزلت على يوتيوب خلال أيام الراحة — أضِف أنواعًا لـ kinds.json (خاناتُ المنتج تفضى)")
     day = datetime.datetime.utcnow().strftime("%Y%m%d")
     rnd = random.Random("yt" + day)
     rnd.shuffle(pool)
-    prequeue(pool[: min(len(pool), 2 * a.max + 2)])
+    if pool and n_prod: prequeue(pool[: min(len(pool), 2 * n_prod + 2)])
     made = 0
     for slot in free[: a.max]:
+        if is_code(slot):
+            made += yt_code_slot(a, slot, code, day, rnd); continue
+        if slot.get("why"): say("   ", slot["why"])
         done = False
         while pool and not done:
             k = pool.pop(0)
@@ -273,7 +313,7 @@ def main_youtube(a):
                 title = hook[0] + " " + hook[1]
                 if a.dry:
                     say(f"   🧪 جافّ: {key} · {os.path.getsize(path)//1000}KB · {p[0]}x{p[1]} {p[2]:.0f}ث"); done = True; break
-                cl = api_post("/api/yt/claim", {"key": key, "kind": k["kind"], "title": title, "search": k["search"],
+                cl = api_post("/api/yt/claim", {"key": key, "type": "product", "kind": k["kind"], "title": title, "search": k["search"],
                                                 "tags": k.get("tags") or [], "src_id": c["id"], "at": slot["at"]})
                 if not cl.get("ok"): say("   ⚠️ الخادم ما حجز:", cl.get("why") or cl); done = True; break
                 try:
