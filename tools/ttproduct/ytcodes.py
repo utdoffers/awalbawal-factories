@@ -57,11 +57,13 @@ def codes_frames(items, cat):
             box = (70, y, 1010, y + 150)
             S.shadow(img, box, 40, alpha=26, blur=18); d = ImageDraw.Draw(img)
             d.rounded_rectangle(box, 40, fill=S.WHITE, outline=S.GOLD if i == 0 else S.LINE, width=5 if i == 0 else 3)
+            # الاسمُ مكتوبٌ دائمًا — الشعارُ وحده لا يُقرأ (قِيس في محاكاة 2/11: «B» وتاجٌ صغير بلا اسم) ⇒ الشعارُ صغيرٌ يمينَ الاسم
             lg = fetch_img(it.get("logo")) if i else None
+            nx = 960
             if lg is not None:
-                p = S.contain(S.flat(lg), 360, 104); img.paste(p, (975 - p.width, y + (150 - p.height) // 2)); d = ImageDraw.Draw(img)
-            else:
-                S.txt(d, (960, y + 78), short_store(it["store"]), True, 56, S.CH, anchor="rm", maxw=390)
+                p = S.contain(S.flat(lg), 96, 96); img.paste(p, (970 - p.width, y + (150 - p.height) // 2)); d = ImageDraw.Draw(img)
+                nx = 970 - p.width - 22
+            S.txt(d, (nx, y + 78), short_store(it["store"]), True, 52, S.CH, anchor="rm", maxw=nx - 575)
             S.code_pill(d, (105, y + 28, 540, y + 122), it["code"], S.CH, S.GOLD, 66)
             y += 168
         S.cta(d, y + 40, S.CH, True); S.footer(d, (179, 154, 74))
