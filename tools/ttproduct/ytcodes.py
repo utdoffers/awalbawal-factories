@@ -51,7 +51,8 @@ def codes_frames(items, cat):
         img = Image.new("RGB", (S.W, S.H), S.WW); d = ImageDraw.Draw(img)
         S.header(img, d, 262)
         S.txt(d, (540, 378), "أكواد خصم اليوم", True, 76, S.CH, maxw=940)
-        if cat and cat != "عام": S.txt(d, (540, 448), "نون وأكواد " + cat, False, 40, S.GR, maxw=900)
+        if cat == "منوّعة": S.txt(d, (540, 448), "نون ومتاجر منوّعة", False, 40, S.GR, maxw=900)   # WP-933: القائمةُ تمزج الأنواع
+        elif cat and cat != "عام": S.txt(d, (540, 448), "نون وأكواد " + cat, False, 40, S.GR, maxw=900)
         y = 500
         for i, it in enumerate(items[:upto]):
             box = (70, y, 1010, y + 150)
