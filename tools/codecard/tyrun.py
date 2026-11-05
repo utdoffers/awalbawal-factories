@@ -4,6 +4,7 @@
 #   ② ما ليس ببصمة اليوم ⇐ ينزّل صورة المنتج (cdn.dsmcdn.com) ⇐ يرسم (render_ty) ⇐ JPEG
 #   ③ POST /api/tycamp/cards/upload  ⇐ تُقبل ببصمة اليوم وحدها
 # ⚖️ لا ينشر شيئًا. منشورُ العصر يأخذ البطاقات إن وُجدت، وإلّا نصًّا كما كان. السرّ TT_BOT_KEY نفسُه.
+# 🏷️ WP-960: ومعها تصميمُ تجميعة ماركات ترينديول — /api/tybrands/card/todo ⇐ tbcard.py (كروم) ⇐ /api/tybrands/card/upload
 import base64, os, sys, time
 from render import render_ty
 from run import api, api_post, fetch_img, say
@@ -13,9 +14,10 @@ DRY = "--dry" in sys.argv
 def main():
     # WP-732(٩): متى ولماذا شُغّل (والعنوانُ يصل مبسَّطًا: بلا حروفٍ تركيّة لا يرسمها الخطّ) — قِيس 2026-10-16 أنّ البطاقة رُسمت 18:33 رياضًا والمنشورُ 16:00 (جدولةُ GitHub تتأخّر)
     say(f"⏱️ {time.strftime('%Y-%m-%d %H:%M:%SZ', time.gmtime())} · {os.environ.get('GITHUB_EVENT_NAME', 'local')} · {os.environ.get('GITHUB_EVENT_SCHEDULE', '')}")
+    tb_ok = brands()
     st, t = api("/api/tycamp/cards/todo")
     if st != 200 or not t.get("ok"):
-        say("⛔ tycamp/cards/todo ردّ", st, t); sys.exit(1)
+        say("⛔ tycamp/cards/todo ردّ", st, t); sys.exit(0 if tb_ok else 1)
     items = t.get("items") or []
     need = [i for i in items if not i.get("fresh")]
     say(f"🟠 حملات اليوم بمنتج: {len(items)} · تحتاج رسمًا: {len(need)} · التصميم {t.get('layout')}")
@@ -36,6 +38,27 @@ def main():
         time.sleep(0.3)
     say(f"🧾 رُسمت ورُفعت {up} · فشلت {fail}")
     if fail and not up: sys.exit(1)
+
+def brands():
+    """🏷️ تصميمُ تجميعة ماركات ترينديول — مرّةً لليوم ببصمته. يعيد True إن لم يكن فيه فشل."""
+    st, t = api("/api/tybrands/card/todo")
+    if st != 200 or not t.get("ok"):
+        say("⛔ tybrands/card/todo ردّ", st, t); return False
+    it = t.get("item")
+    if not it: say("🏷️ تجميعة الماركات:", t.get("why") or "لا شيء اليوم"); return True
+    if t.get("fresh"): say("🏷️ تجميعة الماركات: مرسومةٌ ببصمة اليوم"); return True
+    try:
+        from tbcard import render_tb
+        jpg, broken = render_tb(it)
+    except Exception as e:
+        say("   ❌ رسمُ تصميم الماركات تعذّر:", repr(e)[:200]); return False
+    tag = f"{it.get('hl')} · {len(it.get('items') or [])} منتجات · صورٌ ما حمّلت {broken}"
+    if DRY:
+        os.makedirs("out", exist_ok=True); open(os.path.join("out", "tybrands.jpg"), "wb").write(jpg)
+        say("   🖌️", tag, f"{len(jpg)//1024}KB (جافّ)"); return True
+    st2, r = api_post("/api/tybrands/card/upload", {"sig": it["sig"], "jpg": base64.b64encode(jpg).decode()})
+    if st2 == 200 and r.get("ok"): say("   ✅ 🏷️", tag, f"{len(jpg)//1024}KB"); return True
+    say("   ❌ 🏷️", tag, st2, r.get("why") or r); return False
 
 if __name__ == "__main__":
     main()
