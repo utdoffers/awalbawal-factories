@@ -58,6 +58,21 @@ h1{font-size:70px} h1 .g{color:#2f8f4e}
 """
 
 
+# 🏷️ WP-967: قالبُ «ماركات علي إكسبريس» (ae1) — ترتيبُ ab1 نفسُه بأحمر علي إكسبريس · السطرُ الثاني المواصفة
+CSS_AE = CSS + """
+body{background:#f7f1ef}
+.logo b{color:#e5372b}
+.pill{background:#b0201a} .pill span{color:#ffd2cc}
+h1 .g{color:#e5372b}
+.card{border-color:#eedbd7}
+.sub{color:#9a3a32;font-weight:700}
+.off{background:#e5372b}
+.box{background:#fde6e2} .bl,.bv{color:#b0201a}
+.tip{background:#fde6e2;border-color:#f3c4bd}
+"""
+LAYOUT_CSS = {"ag1": CSS_AG, "ae1": CSS_AE}
+
+
 def cell(p, span=False):
     # المقاساتُ بكسورها (43⅓) تنقلب في سطرٍ عربيّ («⅓43») ⇒ كلُّ مقاسٍ معزولٌ يسارًا بترتيبه
     sz = ('<div class="sz">📏 <span dir="ltr">%s</span></div>' % " · ".join('<bdi dir="ltr">%s</bdi>' % E(x) for x in str(p["sizes"]).split(" · "))) if p.get("sizes") else ""
@@ -76,7 +91,7 @@ def page_html(it, pg):
     k = len(items)
     if k <= 3 and pg.get("of", 1) > 1:
         grid = '<div class="grid rows" style="grid-template-rows:repeat(%d,1fr)">%s</div>' % (max(k, 1), "".join(cell(p) for p in items))
-        grid += '<div class="tip">💡 الروابط في التغريدة · الأسعار من أمازون السعودية نفسها</div>'
+        grid += '<div class="tip">%s</div>' % E(it.get("tip") or "💡 الروابط في التغريدة · الأسعار من أمازون السعودية نفسها")
     else:
         rows = (k + 1) // 2
         cells = [cell(p, span=(k % 2 == 1 and i == k - 1)) for i, p in enumerate(items)]
@@ -85,12 +100,12 @@ def page_html(it, pg):
     mark = ('<span class="pg" dir="ltr">(%d/%d)</span>' % (pg["page"], of)) if of > 1 and pg["page"] > 1 else ""
     sub = it.get("sub2") if pg["page"] > 1 else it.get("sub")
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>'
-            '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول</div><div class="pill">أمازون · <span>%s</span></div></div>'
+            '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول</div><div class="pill">%s · <span>%s</span></div></div>'
             '<h1>%s <span class="g">بخصم</span> يوصل <span dir="ltr">%s%%</span>%s</h1>'
             '<div class="subt">%s</div>%s'
-            '<div class="foot"><div>الأسعار%s من أمازون %s · تتغير بأي لحظة</div><div dir="ltr">@awalbawal_sa</div></div>'
-            '</body></html>') % (CSS_AG if it.get("layout") == "ag1" else CSS, E(it.get("pill")), E(it.get("hl")), E(it.get("pct")), mark, E(sub), grid,
-                                 " والمقاسات" if it.get("sized") else "", E(it.get("date")))
+            '<div class="foot"><div>الأسعار%s %s %s · تتغير بأي لحظة</div><div dir="ltr">@awalbawal_sa</div></div>'
+            '</body></html>') % (LAYOUT_CSS.get(it.get("layout"), CSS), E(it.get("store") or "أمازون"), E(it.get("pill")), E(it.get("hl")), E(it.get("pct")), mark, E(sub), grid,
+                                 " والمقاسات" if it.get("sized") else "", E(it.get("foot") or "من أمازون"), E(it.get("date")))
 
 
 def render_az(it, scale=2):

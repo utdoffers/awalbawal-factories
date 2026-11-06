@@ -2,6 +2,7 @@
 # 🏭🏷️ ═══ WP-962 (D-259) — مصنعُ تصميم تجميعة ماركات أمازون (GitHub Actions · az-cards.yml) ═══
 #   ① GET  /api/azbrands/card/todo   ⇐ القائمةُ المحسومة اليوم (قبل 18:30 بنصف ساعة) بصفحاتها + بصمتُها
 #      🛒 WP-966: ثمّ /api/azgrocery/card/todo — تجميعةُ بقالة أمازون (قبل 15:00 بنصف ساعة) بقالب ag1
+#      🏷️ WP-967: ثمّ /api/aebrands/card/todo — ماركاتُ علي إكسبريس (قبل 10:30 بنصف ساعة) بقالب ae1
 #   ② ليست ببصمة اليوم ⇐ تُرسم كلُّ صفحة (azcard.py · كروم) ⇐ JPEG 2160×2700
 #   ③ POST /api/azbrands/card/upload ⇐ صفحةً صفحة (تُقبل ببصمة القائمة وحدها)
 # ⚖️ لا ينشر شيئًا. التجميعةُ تأخذ التصميمَ إن اكتمل، وإلّا صورَ المنتجات كما كانت. السرّ TT_BOT_KEY نفسُه.
@@ -14,7 +15,9 @@ DRY = "--dry" in sys.argv
 # 🛒 WP-966: المصنعُ نفسُه يرسم تجميعتين — ماركات أمازون (18:00) وبقالة أمازون (14:30) — كلٌّ ببابها وقالبها
 # (الأبوابُ مكتوبةً بحرفها — test_wp360 يقرأ كلَّ api(...) ويقارنه بأبواب المفتاح المسمّاة)
 KINDS = [("azbrands", lambda: api("/api/azbrands/card/todo"), lambda b: api_post("/api/azbrands/card/upload", b), "🏷️", "az"),
-         ("azgrocery", lambda: api("/api/azgrocery/card/todo"), lambda b: api_post("/api/azgrocery/card/upload", b), "🛒", "ag")]
+         ("azgrocery", lambda: api("/api/azgrocery/card/todo"), lambda b: api_post("/api/azgrocery/card/upload", b), "🛒", "ag"),
+         # 🏷️ WP-967: ماركاتُ علي إكسبريس (10:00 الحسم · 10:30 النشر) بقالب ae1
+         ("aebrands", lambda: api("/api/aebrands/card/todo"), lambda b: api_post("/api/aebrands/card/upload", b), "🏷️", "ae")]
 
 
 def one(route, todo, upload, icon, pre):
