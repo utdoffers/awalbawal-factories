@@ -6,6 +6,7 @@
 #      📺 WP-969: ثمّ /api/aeguide/card/todo — دليلُ شراء علي إكسبريس (قبل 23:30 بنصف ساعة)
 #   ② ليست ببصمة اليوم ⇐ تُرسم كلُّ صفحة (azcard.py · كروم) ⇐ JPEG 2160×2700
 #   ③ POST /api/azbrands/card/upload ⇐ صفحةً صفحة (تُقبل ببصمة القائمة وحدها)
+#   🖼️ WP-973: قبل الرفع يُصغَّر العنوانُ حتى يدخل (أو سطرين) وتضيق البطاقاتُ درجةً إن طالت · وأيُّ عيبٍ باقٍ ⇐ لا رفع
 # ⚖️ لا ينشر شيئًا. التجميعةُ تأخذ التصميمَ إن اكتمل، وإلّا صورَ المنتجات كما كانت. السرّ TT_BOT_KEY نفسُه.
 import base64, os, sys, time
 from run import api, api_post, say
@@ -37,7 +38,12 @@ def one(route, todo, upload, icon, pre):
     say(f"{icon} {it.get('hl')} · {sum(len(p['items']) for p in it['pages'])} منتجات · {len(it['pages'])} صفحة · التصميم {t.get('layout')}")
     up = fail = 0
     for page, jpg, broken, over in render_az(it):
-        tag = f"صفحة {page}/{len(it['pages'])} · {len(jpg)//1024}KB" + (f" · ⚠️ {broken} صورة ما نزلت" if broken else "") + (f" · ⚠️ فائض {over}" if over else "")
+        tag = f"صفحة {page}/{len(it['pages'])} · {len(jpg)//1024}KB" + (f" · ⚠️ {broken} صورة ما نزلت" if broken else "")
+        # 🖼️ WP-973: صفحةٌ فيها عيبٌ يراه القارئ (عنوانٌ طالع برّا · حرفٌ مقصوص · بطاقةٌ أطولُ من مكانها) لا تُرفع
+        #   ⇐ التجميعةُ تنزل بصور المنتجات (احتياطُ WP-962) بدل صورةٍ مقصوصة. السببُ مكتوبٌ في السجلّ بكلماته.
+        if over:
+            for why in over: say("   🚫", tag, "·", why)
+            if not DRY: fail += 1; continue
         if DRY:
             os.makedirs("out", exist_ok=True)
             open(os.path.join("out", f"{pre}_{page}.jpg"), "wb").write(jpg)
