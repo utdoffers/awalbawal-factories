@@ -44,6 +44,20 @@ h1{font-size:76px;font-weight:700;margin:20px 0 4px;line-height:1.12;white-space
 """ % (F400, F700, W, H)
 
 
+# 🛒 WP-966: قالبُ «بقالة اليوم» (ag1) — نفسُ الترتيب بألوان البقالة: أخضرُ زيتونيّ بدل الذهبيّ · سلّةٌ بدل الماركة · الحجمُ سطرُه الثاني
+CSS_AG = CSS + """
+body{background:#f1f5ee}
+.logo b{color:#2f8f4e}
+.pill{background:#1f5f36} .pill span{color:#b8f0c8}
+h1{font-size:70px} h1 .g{color:#2f8f4e}
+.card{border-color:#dfe9db}
+.sub{color:#3f7a52;font-weight:700}
+.off{background:#e0662a}
+.box{background:#e3f3e6} .bl,.bv{color:#1f6b3c}
+.tip{background:#e3f3e6;border-color:#bfe0c6}
+"""
+
+
 def cell(p, span=False):
     # المقاساتُ بكسورها (43⅓) تنقلب في سطرٍ عربيّ («⅓43») ⇒ كلُّ مقاسٍ معزولٌ يسارًا بترتيبه
     sz = ('<div class="sz">📏 <span dir="ltr">%s</span></div>' % " · ".join('<bdi dir="ltr">%s</bdi>' % E(x) for x in str(p["sizes"]).split(" · "))) if p.get("sizes") else ""
@@ -75,7 +89,7 @@ def page_html(it, pg):
             '<h1>%s <span class="g">بخصم</span> يوصل <span dir="ltr">%s%%</span>%s</h1>'
             '<div class="subt">%s</div>%s'
             '<div class="foot"><div>الأسعار%s من أمازون %s · تتغير بأي لحظة</div><div dir="ltr">@awalbawal_sa</div></div>'
-            '</body></html>') % (CSS, E(it.get("pill")), E(it.get("hl")), E(it.get("pct")), mark, E(sub), grid,
+            '</body></html>') % (CSS_AG if it.get("layout") == "ag1" else CSS, E(it.get("pill")), E(it.get("hl")), E(it.get("pct")), mark, E(sub), grid,
                                  " والمقاسات" if it.get("sized") else "", E(it.get("date")))
 
 
