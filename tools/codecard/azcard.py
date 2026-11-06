@@ -43,8 +43,8 @@ h1 .nw{white-space:nowrap}
 .tip{background:#fdf3d6;border:2px solid #f0dc9c;border-radius:20px;padding:18px 26px;font-size:24px;margin-top:18px}
 .foot{display:flex;justify-content:space-between;margin-top:16px;font-size:19px;color:#8a8a8a}
 .info>*{flex-shrink:0}
-body.t1 .nm{font-size:22px} body.t1 .sub{font-size:17px;margin:2px 0 5px} body.t1 .now{font-size:30px} body.t1 .sz{font-size:15px;margin-top:6px} body.t1 .bv{font-size:30px} body.t1 .bl{font-size:16px} body.t1 .card{padding:16px 20px}
-body.t2 .nm{font-size:20px} body.t2 .sub{font-size:16px;margin:1px 0 4px} body.t2 .now{font-size:27px} body.t2 .was{font-size:19px} body.t2 .sz{font-size:14px;margin-top:4px;-webkit-line-clamp:1} body.t2 .bv{font-size:26px} body.t2 .bl{font-size:14px} body.t2 .box{padding:3px 0 2px} body.t2 .card{padding:14px 18px} body.t2 .grid{gap:14px}
+body.t1 .nm{font-size:22px} body.t1 .sub{font-size:17px;margin:2px 0 5px} body.t1 .now{font-size:30px} body.t1 .sz{font-size:15px;margin-top:6px} body.t1 .bv{font-size:30px} body.t1 .bl{font-size:16px} body.t1 .card{padding:16px 20px} body.t1 .was{font-size:20px} body.t1 .off{font-size:19px;padding:2px 8px} body.t1 .bd{font-size:18px} body.t1 .pr{gap:6px}
+body.t2 .nm{font-size:20px} body.t2 .sub{font-size:16px;margin:1px 0 4px} body.t2 .now{font-size:27px} body.t2 .was{font-size:18px} body.t2 .off{font-size:17px;padding:1px 7px} body.t2 .bd{font-size:16px} body.t2 .pr{gap:5px} body.t2 .sz{font-size:14px;margin-top:4px;-webkit-line-clamp:1} body.t2 .bv{font-size:26px} body.t2 .bl{font-size:14px} body.t2 .box{padding:3px 0 2px} body.t2 .card{padding:14px 18px} body.t2 .grid{gap:14px}
 """ % (F400, F700, W, H)
 
 
@@ -123,7 +123,7 @@ def page_html(it, pg):
 #   قوله 2026-11-06 «١ بشكل جذري» بعد تجميعة 18:41: «ماركات الإلكترونيات بخصم يوصل 66%» عرضُه 1199 على 996 ⇒ انقصّ الرقم،
 #   والحارسُ القديم كان يقيس الطولَ وحده فمرّت. ٩ من ١٠ مجالات كانت تطلع برّا بخطّ 76.
 #   ① FIT_JS: يصغّر العنوانَ خطوةً خطوة حتى يدخل (حتى 72% من حجمه) · وإن ما كفى ينزل سطرين متوازنين («يوصل X%» لا تنفصل)
-#   ①ب CARDS_FIT_JS: بطاقةٌ محتواها أطولُ منها (اسمٌ بسطرين + مقاسات) ⇒ الصفحةُ كلُّها تضيق درجةً (t1) ثمّ درجتين (t2) بدل ما تنقصّ
+#   ①ب CARDS_FIT_JS: بطاقةٌ محتواها أطولُ منها (اسمٌ بسطرين + مقاسات) أو سطرُ السعر أعرضُ من مكانه (583.94 بدل 2910 -80% — دخل على الصورة) ⇒ الصفحةُ كلُّها تضيق درجةً (t1) ثمّ درجتين (t2) بدل ما تنقصّ
 #   ② INSPECT_JS: كلُّ عنصرٍ داخل الصفحة وداخل بطاقته · لا بطاقةَ أطولَ من مكانها · لا حرفَ مقصوصٌ من تحت (نقاط الياء)
 #   ③ أيُّ عيبٍ ⇒ azrun.py لا يرفع الصفحة ⇒ التجميعةُ تنزل بصور المنتجات (احتياطُ WP-962) بدل صورةٍ مقصوصة
 FIT_MIN = 0.72      # أصغرُ حجمٍ للعنوان نسبةً لحجمه في القالب (76 ⇐ 54 · 70 ⇐ 50)
@@ -143,6 +143,7 @@ FIT_JS = """(minr) => {
 }"""
 CARDS_FIT_JS = """() => {
   const tall = () => [...document.querySelectorAll('.card')].some(c => c.scrollHeight > c.clientHeight + 2)
+    || [...document.querySelectorAll('.pr')].some(e => e.scrollWidth > e.clientWidth + 1)
     || [...document.querySelectorAll('.nm,.sz')].some(e => { const l = parseFloat(getComputedStyle(e).lineHeight); return Math.round(e.scrollHeight / l) <= 2 && e.scrollHeight > e.clientHeight + 0.5; });
   let lv = 0;
   for (const c of ['t1', 't2']) { if (!tall()) break; document.body.classList.remove('t1'); document.body.classList.add(c); lv++; }
@@ -160,6 +161,8 @@ INSPECT_JS = """(H) => {
     if (r.left < -1 || r.right > W + 1) { out.push('عنصر طالع برا الصفحة ' + nm(e)); continue; }
     const c = e.closest('.card');
     if (c && c !== e) { const cr = c.getBoundingClientRect(); if (r.left < cr.left - 1 || r.right > cr.right + 1) out.push('عنصر طالع برا بطاقته ' + nm(e)); }
+    const f = e.closest('.info');
+    if (f && f !== e) { const fr = f.getBoundingClientRect(); if (r.left < fr.left - 1 || r.right > fr.right + 1) out.push('عنصر داخل على صورة المنتج ' + nm(e)); }
   }
   for (const c of document.querySelectorAll('.card')) if (c.scrollHeight > c.clientHeight + 2) out.push('بطاقة محتواها أطول منها ' + nm(c.querySelector('.nm') || c));
   for (const e of document.querySelectorAll('.nm,.sz')) {
