@@ -77,13 +77,14 @@ def cell(p, span=False):
     # المقاساتُ بكسورها (43⅓) تنقلب في سطرٍ عربيّ («⅓43») ⇒ كلُّ مقاسٍ معزولٌ يسارًا بترتيبه
     sz = ('<div class="sz">📏 <span dir="ltr">%s</span></div>' % " · ".join('<bdi dir="ltr">%s</bdi>' % E(x) for x in str(p["sizes"]).split(" · "))) if p.get("sizes") else ""
     img = ('<img src="%s">' % E(p["img"])) if p.get("img") else ""
+    # 📺 WP-969: دليلُ الشراء — «بدل» ونسبتُها فقط حين يكون للسعر قبل · وخانةُ السعر تحمل وسمَ الموديل (الأرخص/الأفخم/الأكثر طلبًا)
+    was = ('<span class="bd">بدل</span><span class="was">%s</span><span class="off" dir="ltr">-%s%%</span>' % (E(p.get("was")), E(p.get("pct")))) if p.get("was") not in (None, "") else ""
     return ('<div class="card%s"><div class="pic">%s</div><div class="info">'
             '<div class="nm">%s</div><div class="sub">%s</div>'
-            '<div class="pr"><span class="now">%s</span><span class="bd">بدل</span><span class="was">%s</span>'
-            '<span class="off" dir="ltr">-%s%%</span></div>%s'
-            '<div class="box"><div class="bl">السعر</div><div class="bv">%s</div></div></div></div>'
-            % (" span2" if span else "", img, E(p.get("name")), E(p.get("sub")), E(p.get("price")), E(p.get("was")),
-               E(p.get("pct")), sz, E(p.get("price"))))
+            '<div class="pr"><span class="now">%s</span>%s</div>%s'
+            '<div class="box"><div class="bl">%s</div><div class="bv">%s</div></div></div></div>'
+            % (" span2" if span else "", img, E(p.get("name")), E(p.get("sub")), E(p.get("price")), was, sz,
+               E(p.get("tag") or "السعر"), E(p.get("price"))))
 
 
 def page_html(it, pg):
@@ -99,12 +100,17 @@ def page_html(it, pg):
     of = pg.get("of", 1)
     mark = ('<span class="pg" dir="ltr">(%d/%d)</span>' % (pg["page"], of)) if of > 1 and pg["page"] > 1 else ""
     sub = it.get("sub2") if pg["page"] > 1 else it.get("sub")
+    # 📺 WP-969: الدليلُ عنوانُه «دليل شراء <الفئة>» · والتجميعاتُ كما كانت حرفًا «<الماركة> بخصم يوصل X%»
+    if it.get("guide"):
+        h1 = '<h1>%s <span class="g">%s</span>%s</h1>' % (E(it.get("hl_pre") or "دليل شراء"), E(it.get("hl")), mark)
+    else:
+        h1 = '<h1>%s <span class="g">بخصم</span> يوصل <span dir="ltr">%s%%</span>%s</h1>' % (E(it.get("hl")), E(it.get("pct")), mark)
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>'
             '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول</div><div class="pill">%s · <span>%s</span></div></div>'
-            '<h1>%s <span class="g">بخصم</span> يوصل <span dir="ltr">%s%%</span>%s</h1>'
+            '%s'
             '<div class="subt">%s</div>%s'
             '<div class="foot"><div>الأسعار%s %s %s · تتغير بأي لحظة</div><div dir="ltr">@awalbawal_sa</div></div>'
-            '</body></html>') % (LAYOUT_CSS.get(it.get("layout"), CSS), E(it.get("store") or "أمازون"), E(it.get("pill")), E(it.get("hl")), E(it.get("pct")), mark, E(sub), grid,
+            '</body></html>') % (LAYOUT_CSS.get(it.get("layout"), CSS), E(it.get("store") or "أمازون"), E(it.get("pill")), h1, E(sub), grid,
                                  " والمقاسات" if it.get("sized") else "", E(it.get("foot") or "من أمازون"), E(it.get("date")))
 
 
