@@ -244,14 +244,22 @@ def yt_code_slot(a, slot, code, day, rnd):
         keep = os.path.join(dd, key + ".mp4"); shutil.copy(path, keep)
         say(f"   🧪 جافّ: {key} · {os.path.getsize(path)//1000}KB · {str(m.get('title') or '')[:90]}"); return 1
     cl = api_post("/api/yt/claim", {"key": key, "type": t, "ckeys": ckeys, "at": slot["at"]})
-    if not cl.get("ok"): say("   ⚠️ الخادم ما حجز:", cl.get("why") or cl); return 0
+    if not cl.get("ok"):
+        say("   ⚠️ الخادم ما حجز:", cl.get("why") or cl)
+        if cl.get("stop"): raise YtStop(cl.get("why"))
+        return 0
     try:
         vid, ust = yt_upload(path, cl)
     except Exception as e:
-        api_post("/api/yt/done", {"key": key, "why": str(e)[:280]}); say("   ⛔ تعذّر الرفع ليوتيوب:", e); return 0
+        d = api_post("/api/yt/done", {"key": key, "why": str(e)[:280]}); say("   ⛔ تعذّر الرفع ليوتيوب:", e)
+        if (d or {}).get("stop"): raise YtStop("يوتيوب أوقف الرفع لحدّه — الباقي ينتظر مقعدًا")
+        return 0
     api_post("/api/yt/done", {"key": key, "video_id": vid})
     say(f"   ✅ رُفع: https://www.youtube.com/shorts/{vid} ({ust}) ← {cl.get('publish_at') or 'الآن'}")
     return 1
+
+class YtStop(Exception):
+    """⏳ WP-981: الخادمُ أو يوتيوب قال «لا مقعد» — تقف الدفعةُ كلُّها بلا رسمٍ ولا رفعٍ ضائع."""
 
 def main_youtube(a):
     global W, H
@@ -265,6 +273,11 @@ def main_youtube(a):
     free, code = st.get("free") or [], st.get("code") or ""
     if not free: say("✅ لا خانةَ فاضيةَ ليوتيوب في اليومين القادمين — ما في شغل"); return
     cfg = st.get("cfg") or {}; rest = int(cfg.get("rest_days") or 21)
+    # 🧮 WP-981: لا يرفع أكثر من مقاعد الـ٢٤ ساعة (سقفُ خانات يومك) — الخادمُ يقولها في room
+    rm = st.get("room") or {}
+    if rm.get("room") is not None and int(rm["room"]) < a.max:
+        say(f"🧮 مقاعدُ يوتيوب في آخر ٢٤ ساعة: {rm['room']} (رُفع {rm.get('used')} · السقف {rm.get('cap')})")
+        a.max = max(0, int(rm["room"]))
     kinds = json.load(open(os.path.join(HERE, "kinds.json"), encoding="utf-8"))["kinds"]
     cutoff = (datetime.datetime.utcnow() - datetime.timedelta(days=rest)).isoformat()
     recent = st.get("recent") or []
@@ -280,51 +293,59 @@ def main_youtube(a):
     rnd.shuffle(pool)
     if pool and n_prod: prequeue(pool[: min(len(pool), 2 * n_prod + 2)])
     made = 0
-    for slot in free[: a.max]:
-        if is_code(slot):
-            made += yt_code_slot(a, slot, code, day, rnd); continue
-        if slot.get("why"): say("   ", slot["why"])
-        done = False
-        while pool and not done:
-            k = pool.pop(0)
-            say(f"▶️ خانة يوتيوب {slot['day']} {slot['hm']} ← النوع «{k['kind']}»")
-            try:
-                cands = [c for c in find_videos(k["kind"], k["q"]) if c["id"] not in used_src]
-            except Exception as e:
-                say("   ⚠️ تعثّر الصيد:", e); continue
-            got = []
-            for c in cands[:6]:
-                tmp = tempfile.mkdtemp(prefix="yt")
-                src = os.path.join(tmp, "src.mp4")
-                if not download(c["video"], src): say("   ⚠️ ما نزل الفيديو"); continue
-                p = probe(src)
-                if not p or p[2] < 6: say("   ⚠️ فيديو قصيرٌ أو تالف"); continue
-                got.append((c, tmp, src, p))
-                if p[1] >= p[0] or len(got) >= 4: break
-            got.sort(key=lambda g: (0 if g[3][1] >= g[3][0] else 1))
-            for c, tmp, src, p in got:
-                hook = rnd.choice(k["hooks"])
-                png = os.path.join(tmp, "ov.png"); wav = os.path.join(tmp, "m.wav"); out = os.path.join(tmp, "out.mp4")
-                overlay(png, hook[0], hook[1], k["search"], code, y0=YT_BAND_Y)
-                subprocess.run([sys.executable, os.path.join(HERE, "music.py"), "8.75", str(rnd.randint(1, 10**6)), wav], check=True, capture_output=True)
-                path, err = render_yt(src, png, wav, out, *p)
-                if not path: say("   ⚠️ تعثّر الرسم:", err); continue
-                key = f"YS-{day}-{k['kind']}-{c['id'][-6:]}"
-                title = hook[0] + " " + hook[1]
-                if a.dry:
-                    say(f"   🧪 جافّ: {key} · {os.path.getsize(path)//1000}KB · {p[0]}x{p[1]} {p[2]:.0f}ث"); done = True; break
-                cl = api_post("/api/yt/claim", {"key": key, "type": "product", "kind": k["kind"], "title": title, "search": k["search"],
-                                                "tags": k.get("tags") or [], "src_id": c["id"], "at": slot["at"]})
-                if not cl.get("ok"): say("   ⚠️ الخادم ما حجز:", cl.get("why") or cl); done = True; break
+    try:
+        for slot in free[: a.max]:
+            if is_code(slot):
+                made += yt_code_slot(a, slot, code, day, rnd); continue
+            if slot.get("why"): say("   ", slot["why"])
+            done = False
+            while pool and not done:
+                k = pool.pop(0)
+                say(f"▶️ خانة يوتيوب {slot['day']} {slot['hm']} ← النوع «{k['kind']}»")
                 try:
-                    vid, ust = yt_upload(path, cl)
+                    cands = [c for c in find_videos(k["kind"], k["q"]) if c["id"] not in used_src]
                 except Exception as e:
-                    api_post("/api/yt/done", {"key": key, "why": str(e)[:280]})
-                    say("   ⛔ تعذّر الرفع ليوتيوب:", e); done = True; break
-                api_post("/api/yt/done", {"key": key, "video_id": vid})
-                say(f"   ✅ رُفع: https://www.youtube.com/shorts/{vid} ({ust}) ← {cl.get('publish_at') or 'الآن'}")
-                made += 1; done = True; break
-            if not done: say(f"   ↪️ «{k['kind']}» بلا فيديو صالح — النوعُ التالي")
+                    say("   ⚠️ تعثّر الصيد:", e); continue
+                got = []
+                for c in cands[:6]:
+                    tmp = tempfile.mkdtemp(prefix="yt")
+                    src = os.path.join(tmp, "src.mp4")
+                    if not download(c["video"], src): say("   ⚠️ ما نزل الفيديو"); continue
+                    p = probe(src)
+                    if not p or p[2] < 6: say("   ⚠️ فيديو قصيرٌ أو تالف"); continue
+                    got.append((c, tmp, src, p))
+                    if p[1] >= p[0] or len(got) >= 4: break
+                got.sort(key=lambda g: (0 if g[3][1] >= g[3][0] else 1))
+                for c, tmp, src, p in got:
+                    hook = rnd.choice(k["hooks"])
+                    png = os.path.join(tmp, "ov.png"); wav = os.path.join(tmp, "m.wav"); out = os.path.join(tmp, "out.mp4")
+                    overlay(png, hook[0], hook[1], k["search"], code, y0=YT_BAND_Y)
+                    subprocess.run([sys.executable, os.path.join(HERE, "music.py"), "8.75", str(rnd.randint(1, 10**6)), wav], check=True, capture_output=True)
+                    path, err = render_yt(src, png, wav, out, *p)
+                    if not path: say("   ⚠️ تعثّر الرسم:", err); continue
+                    key = f"YS-{day}-{k['kind']}-{c['id'][-6:]}"
+                    title = hook[0] + " " + hook[1]
+                    if a.dry:
+                        say(f"   🧪 جافّ: {key} · {os.path.getsize(path)//1000}KB · {p[0]}x{p[1]} {p[2]:.0f}ث"); done = True; break
+                    cl = api_post("/api/yt/claim", {"key": key, "type": "product", "kind": k["kind"], "title": title, "search": k["search"],
+                                                    "tags": k.get("tags") or [], "src_id": c["id"], "at": slot["at"]})
+                    if not cl.get("ok"):
+                        say("   ⚠️ الخادم ما حجز:", cl.get("why") or cl)
+                        if cl.get("stop"): raise YtStop(cl.get("why"))
+                        done = True; break
+                    try:
+                        vid, ust = yt_upload(path, cl)
+                    except Exception as e:
+                        d = api_post("/api/yt/done", {"key": key, "why": str(e)[:280]})
+                        say("   ⛔ تعذّر الرفع ليوتيوب:", e)
+                        if (d or {}).get("stop"): raise YtStop("يوتيوب أوقف الرفع لحدّه — الباقي ينتظر مقعدًا")
+                        done = True; break
+                    api_post("/api/yt/done", {"key": key, "video_id": vid})
+                    say(f"   ✅ رُفع: https://www.youtube.com/shorts/{vid} ({ust}) ← {cl.get('publish_at') or 'الآن'}")
+                    made += 1; done = True; break
+                if not done: say(f"   ↪️ «{k['kind']}» بلا فيديو صالح — النوعُ التالي")
+    except YtStop as e:
+        say("⏳", e, "— وقفتُ الدفعة؛ الخاناتُ الباقيةُ فاضيةٌ والخادمُ يوقظني حين يتحرّر مقعد")
     say(f"🏁 يوتيوب: رُفع {made} من {min(len(free), a.max)}")
 
 def main():
