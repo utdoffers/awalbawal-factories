@@ -4,6 +4,7 @@
 #   ② ما ليس ببصمة اليوم ⇐ ينزّل صورة المنتج (cdn.dsmcdn.com) ⇐ يرسم (render_ty) ⇐ JPEG
 #   ③ POST /api/tycamp/cards/upload  ⇐ تُقبل ببصمة اليوم وحدها
 # ⚖️ لا ينشر شيئًا. منشورُ العصر يأخذ البطاقات إن وُجدت، وإلّا نصًّا كما كان. السرّ TT_BOT_KEY نفسُه.
+# 🧡 WP-980: وصورةُ التجميعة الواحدة (أقوى ٤ منتجات) — `pack` في ردّ todo ⇐ tcpack.py ⇐ upload cid=pack
 # 🏷️ WP-960: ومعها تصميمُ تجميعة ماركات ترينديول — /api/tybrands/card/todo ⇐ tbcard.py (كروم) ⇐ /api/tybrands/card/upload
 import base64, os, sys, time
 from render import render_ty
@@ -18,6 +19,7 @@ def main():
     st, t = api("/api/tycamp/cards/todo")
     if st != 200 or not t.get("ok"):
         say("⛔ tycamp/cards/todo ردّ", st, t); sys.exit(0 if tb_ok else 1)
+    pk_ok = pack(t.get("pack"))   # 🧡 WP-980: صورةُ التجميعة أوّلًا — هي اللي تنزل
     items = t.get("items") or []
     need = [i for i in items if not i.get("fresh")]
     say(f"🟠 حملات اليوم بمنتج: {len(items)} · تحتاج رسمًا: {len(need)} · التصميم {t.get('layout')}")
@@ -37,7 +39,26 @@ def main():
         else: fail += 1; say("   ❌", tag, st2, r.get("why") or r)
         time.sleep(0.3)
     say(f"🧾 رُسمت ورُفعت {up} · فشلت {fail}")
-    if fail and not up: sys.exit(1)
+    if (fail and not up) or not pk_ok: sys.exit(1)
+
+def pack(it):
+    """🧡 WP-980 — صورةُ تجميعة الحملات (أقوى ٤) ببصمة اليوم. أيُّ عيبٍ مقيس ⇒ لا رفع والمنشورُ بالبطاقات كما كان. True إن لم يفشل شيء."""
+    if not it: say("🧡 التجميعة: ما فيه منتجين من ماركتين مقروءين بعد"); return True
+    if it.get("fresh"): say("🧡 التجميعة: مرسومةٌ ببصمة اليوم"); return True
+    try:
+        from tcpack import render_pack
+        jpg, why = render_pack(it, fetch_img)
+    except Exception as e:
+        say("   ❌ 🧡 رسمُ التجميعة تعذّر:", repr(e)[:200]); return False
+    tag = " · ".join(f"{p.get('brand')} {p.get('now')}/{p.get('was')}" for p in (it.get("items") or []))
+    if why:
+        say("   🚫 🧡", tag, "·", why); return False
+    if DRY:
+        os.makedirs("out", exist_ok=True); open(os.path.join("out", "tcpack.jpg"), "wb").write(jpg)
+        say("   🖌️ 🧡", tag, f"{len(jpg)//1024}KB (جافّ)"); return True
+    st2, r = api_post("/api/tycamp/cards/upload", {"cid": "pack", "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()})
+    if st2 == 200 and r.get("ok"): say("   ✅ 🧡", tag, f"{len(jpg)//1024}KB"); return True
+    say("   ❌ 🧡", tag, st2, r.get("why") or r); return False
 
 def brands():
     """🏷️ تصميمُ تجميعة ماركات ترينديول — مرّةً لليوم ببصمته. يعيد True إن لم يكن فيه فشل."""
