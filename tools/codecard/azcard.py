@@ -245,6 +245,50 @@ def page_html(it, pg):
 
 
 
+# ➕ ═══ WP-995 — قالبُ «المرافق» (cp1): الصيدةُ كبيرةً فوق · «+ ويكمّلها» · ما يكمّلها تحت · «الاثنين معًا / توفّر» ═══
+#   بعد التصوّر الذي أرسله Claude 8/11 (حفاضات بيبي جوي + مناديلها · مكواة براون + طاولة كي) وقوله «اعتمد وابني».
+#   ألوانُ قالب ab1 نفسُها وخطُّه · لا رابطَ ولا سعرَ يُكتب هنا: كلُّه من الخادم (lib/companion.js · cpCardItem).
+CSS_CP = CSS + """
+.cp-main{margin-top:28px;padding:30px 34px;flex:1.35;gap:22px}
+.cp-main .pic{width:400px}.cp-main .pic img{max-width:400px;max-height:430px}
+.cp-comp{padding:22px 30px;flex:.8;gap:22px}
+.cp-comp .pic{width:250px}.cp-comp .pic img{max-width:250px;max-height:260px}
+.card.cp-main,.card.cp-comp{display:flex}
+.cp .info{justify-content:center}
+.cp .tag{align-self:flex-start;background:#fdf3d6;color:#a07c11;font-weight:700;font-size:21px;border-radius:12px;padding:4px 14px;margin-bottom:14px}
+.cp .nm{font-size:36px;-webkit-line-clamp:3} .cp-comp .nm{font-size:30px;-webkit-line-clamp:2}
+.cp .now{font-size:58px} .cp-comp .now{font-size:46px} .cp .cur{font-size:26px;font-weight:700}
+.cp .was{font-size:28px} .cp .off{font-size:28px;padding:3px 14px;border-radius:12px}
+.plus{display:flex;align-items:center;gap:16px;margin:18px 6px}
+.plus .c{width:58px;height:58px;border-radius:50%;background:#e0a91a;color:#fff;font-size:44px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
+.plus .t{font-size:30px;font-weight:700;white-space:nowrap}.plus .t span{color:#a07c11}
+.plus .ln{flex:1;border-top:3px dashed #ddd5c6}
+.cbox{background:#fdf3d6;border-radius:20px;display:flex;justify-content:space-around;padding:14px 0;margin-top:20px}
+.cbox div{text-align:center}.cbox .bl{font-size:20px}.cbox .bv{font-size:40px;line-height:1.2}
+"""
+
+
+def cp_cell(p, cls, tag=""):
+    img = ('<img src="%s">' % E(p["img"])) if p.get("img") else ""
+    was = ('<span class="was">%s</span><span class="off" dir="ltr">-%s%%</span>' % (E(p.get("was")), E(p.get("pct")))) if p.get("was") not in (None, "") else ""
+    return ('<div class="card %s"><div class="pic">%s</div><div class="info">%s<div class="nm">%s</div>'
+            '<div class="pr"><span class="now">%s</span><span class="cur">ريال</span>%s</div></div></div>'
+            % (cls, img, ('<div class="tag">%s</div>' % E(tag)) if tag else "", E(p.get("name")), E(p.get("price")), was))
+
+
+def comp_html(it, pg):
+    items = pg.get("items") or []
+    main = next((x for x in items if x.get("role") == "main"), items[0] if items else {})
+    comp = next((x for x in items if x.get("role") == "comp"), items[1] if len(items) > 1 else {})
+    box = "".join('<div><div class="bl">%s</div><div class="bv">%s</div></div>' % (E(a), E(b)) for a, b in (it.get("box") or []))
+    return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body class="cp">'
+            '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول</div><div class="pill">%s · <span>%s</span></div></div>'
+            '%s<div class="plus"><div class="c">+</div><div class="t">%s <span>%s</span></div><div class="ln"></div></div>%s'
+            '%s<div class="foot"><div>الأسعار %s · تتغير بأي لحظة</div><div dir="ltr">@awalbawal_sa</div></div>'
+            '</body></html>') % (CSS_CP, E(it.get("pill") or "صيدة اليوم"), E(it.get("store") or "أمازون"),
+                                 cp_cell(main, "cp-main", "🔥 الصيدة"), E(it.get("lead")), E(it.get("why") or ""), cp_cell(comp, "cp-comp"),
+                                 ('<div class="cbox">%s</div>' % box) if box else "", E(it.get("date")))
+
 # 🖼️ ═══ WP-973 — العنوانُ يدخل في الصفحة دائمًا، والحارسُ يرى ما يراه القارئ ═══
 #   قوله 2026-11-06 «١ بشكل جذري» بعد تجميعة 18:41: «ماركات الإلكترونيات بخصم يوصل 66%» عرضُه 1199 على 996 ⇒ انقصّ الرقم،
 #   والحارسُ القديم كان يقيس الطولَ وحده فمرّت. ٩ من ١٠ مجالات كانت تطلع برّا بخطّ 76.
@@ -312,7 +356,9 @@ def render_az(it, scale=2):
         if guide: prep_guide_imgs(it)   # 🖼️ WP-991: أنظفُ صورةٍ من معرض كلِّ موديل
         for pg in it.get("pages") or []:
             path = os.path.join(HERE, "_azcard_%d.html" % pg["page"])
-            open(path, "w", encoding="utf-8").write(guide_html(it, pg) if guide else page_html(it, pg))
+            # ➕ WP-995: بطاقةُ المرافق بقالبها (cp1)
+            html_ = comp_html(it, pg) if it.get("layout") == "cp1" else (guide_html(it, pg) if guide else page_html(it, pg))
+            open(path, "w", encoding="utf-8").write(html_)
             pgw.goto("file://" + path, wait_until="networkidle", timeout=60000)
             pgw.wait_for_timeout(700)
             broken = pgw.evaluate("[...document.images].filter(i=>!i.complete||!i.naturalWidth).length")

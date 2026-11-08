@@ -21,7 +21,9 @@ KINDS = [("azbrands", lambda: api("/api/azbrands/card/todo"), lambda b: api_post
          # 🏷️ WP-967: ماركاتُ علي إكسبريس (10:00 الحسم · 10:30 النشر) بقالب ae1
          ("aebrands", lambda: api("/api/aebrands/card/todo"), lambda b: api_post("/api/aebrands/card/upload", b), "🏷️", "ae"),
          # 📺 WP-969: دليلُ شراء علي إكسبريس (23:00 الحسم · 23:30 النشر) بقالب ae1 وعنوان الدليل
-         ("aeguide", lambda: api("/api/aeguide/card/todo"), lambda b: api_post("/api/aeguide/card/upload", b), "📺", "ag2")]
+         ("aeguide", lambda: api("/api/aeguide/card/todo"), lambda b: api_post("/api/aeguide/card/upload", b), "📺", "ag2"),
+         # ➕ WP-995: بطاقاتُ المرافق (الصيدة + ما يكمّلها) بقالب cp1 — عدّةُ بطاقاتٍ في الدورة (لكلِّ صيدةٍ بطاقة)
+         ("companion", lambda: api("/api/companion/card/todo"), lambda b: api_post("/api/companion/card/upload", b), "➕", "cp")]
 
 
 def one(route, todo, upload, icon, pre):
@@ -31,13 +33,15 @@ def one(route, todo, upload, icon, pre):
     items = t.get("items") or []
     if not items:
         say(f"{icon} لا تصميمَ مطلوب الآن:", t.get("why") or "—"); return (0, 0)
-    it = items[0]
-    if it.get("fresh"):
-        say(f"{icon} تصميمُ اليوم مرسومٌ ببصمته", it.get("sig")); return (0, 0)
+    # ➕ WP-995: كلُّ بندٍ ينتظر يُرسم (التجميعاتُ بندٌ واحدٌ كما كانت · والمرافقُ بطاقةٌ لكلِّ صيدة)
+    todo_items = [x for x in items if not x.get("fresh")]
+    if not todo_items:
+        say(f"{icon} تصميمُ اليوم مرسومٌ ببصمته", items[0].get("sig")); return (0, 0)
     from azcard import render_az
-    say(f"{icon} {it.get('hl')} · {sum(len(p['items']) for p in it['pages'])} منتجات · {len(it['pages'])} صفحة · التصميم {t.get('layout')}")
     up = fail = 0
-    for page, jpg, broken, over in render_az(it):
+    for it in todo_items:
+      say(f"{icon} {it.get('hl')} · {sum(len(p['items']) for p in it['pages'])} منتجات · {len(it['pages'])} صفحة · التصميم {t.get('layout')}")
+      for page, jpg, broken, over in render_az(it):
         tag = f"صفحة {page}/{len(it['pages'])} · {len(jpg)//1024}KB" + (f" · ⚠️ {broken} صورة ما نزلت" if broken else "")
         # 🖼️ WP-973: صفحةٌ فيها عيبٌ يراه القارئ (عنوانٌ طالع برّا · حرفٌ مقصوص · بطاقةٌ أطولُ من مكانها) لا تُرفع
         #   ⇐ التجميعةُ تنزل بصور المنتجات (احتياطُ WP-962) بدل صورةٍ مقصوصة. السببُ مكتوبٌ في السجلّ بكلماته.
@@ -46,7 +50,7 @@ def one(route, todo, upload, icon, pre):
             if not DRY: fail += 1; continue
         if DRY:
             os.makedirs("out", exist_ok=True)
-            open(os.path.join("out", f"{pre}_{page}.jpg"), "wb").write(jpg)
+            open(os.path.join("out", f"{pre}_{str(it.get('sig') or '')[:6]}_{page}.jpg" if len(todo_items) > 1 else f"{pre}_{page}.jpg"), "wb").write(jpg)
             say("   🖌️", tag, "(جافّ)"); continue
         st2, r = upload({"sig": it["sig"], "page": page, "jpg": base64.b64encode(jpg).decode()})
         if st2 == 200 and r.get("ok"): up += 1; say("   ✅", tag)
