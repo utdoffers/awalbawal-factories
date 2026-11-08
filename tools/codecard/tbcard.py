@@ -24,6 +24,7 @@ h1{font-size:70px;font-weight:700;margin:22px 0 4px;line-height:1.15} h1 .hl{col
 .card{background:#fff;border:2px solid #ece8e1;border-radius:22px;padding:18px;display:flex;gap:14px;min-height:262px}
 .pic{width:150px;flex:none;display:flex;align-items:center;justify-content:center}
 .pic img{max-width:150px;max-height:215px;object-fit:contain;border-radius:10px}
+.noimg{width:130px;height:170px;border-radius:14px;background:#f6f3ee;display:flex;align-items:center;justify-content:center;font-size:54px}
 .info{flex:1;display:flex;flex-direction:column;min-width:0}
 .nm{font-size:23px;font-weight:700;line-height:1.25} .sub{font-size:17px;color:#7a7a7a;margin:2px 0 8px;min-height:6px}
 .pr{font-size:19px;color:#555;white-space:nowrap} .now{font-size:27px;font-weight:700;color:#1c1c1c}
@@ -46,13 +47,15 @@ def card_html(it):
     for p in items:
         sub = E(p.get("brand") or "")
         sz = ('<div class="sz">📏 %s</div>' % E(p["sizes"])) if p.get("sizes") else ""
+        # 🛡️ WP-990: صورةُ المنتج الحسّاس غيرُ المناسبة تُفرَّغ ⇒ مربّعٌ هادئ بدل صورةٍ مكسورة
+        pic = ('<img src="%s">' % E(p.get("img"))) if p.get("img") else '<div class="noimg">🏷️</div>'
         cells.append(
-            '<div class="card"><div class="pic"><img src="%s"></div><div class="info">'
+            '<div class="card"><div class="pic">%s</div><div class="info">'
             '<div class="nm">%s</div><div class="sub">%s</div>'
             '<div class="pr"><span class="now">%s</span> <span class="bd">بدل</span> <span class="was">%s</span> '
             '<span class="off" dir="ltr">-%s%%</span></div>%s'
             '<div class="box"><div class="bl">السعر</div><div class="bv">%s</div></div></div></div>'
-            % (E(p.get("img")), E(p.get("title")), sub, E(p.get("price")), E(p.get("was")), E(p.get("pct")), sz, E(p.get("price"))))
+            % (pic, E(p.get("title")), sub, E(p.get("price")), E(p.get("was")), E(p.get("pct")), sz, E(p.get("price"))))
     if it.get("code"):
         wide = " wide" if len(items) % 2 == 0 else ""
         cells.append('<div class="card dark%s"><div class="cd"><div class="cdrow"><span class="key">🔑 الكود</span>'
