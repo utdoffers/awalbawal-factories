@@ -19,7 +19,8 @@ def main():
     st, t = api("/api/tycamp/cards/todo")
     if st != 200 or not t.get("ok"):
         say("⛔ tycamp/cards/todo ردّ", st, t); sys.exit(0 if tb_ok else 1)
-    pk_ok = pack(t.get("pack"))   # 🧡 WP-980: صورةُ التجميعة أوّلًا — هي اللي تنزل
+    th_ok = thread_cards(t.get("lead"), t.get("rest"))   # 🧵 WP-986: صورتا الثريد أوّلًا — هما اللي تنزلان يوم فيه ماركةُ اليوم
+    pk_ok = pack(t.get("pack"))   # 🧡 WP-980: صورةُ التجميعة — تنزل يوم بلا ماركة اليوم
     items = t.get("items") or []
     need = [i for i in items if not i.get("fresh")]
     say(f"🟠 حملات اليوم بمنتج: {len(items)} · تحتاج رسمًا: {len(need)} · التصميم {t.get('layout')}")
@@ -39,7 +40,32 @@ def main():
         else: fail += 1; say("   ❌", tag, st2, r.get("why") or r)
         time.sleep(0.3)
     say(f"🧾 رُسمت ورُفعت {up} · فشلت {fail}")
-    if (fail and not up) or not pk_ok: sys.exit(1)
+    if (fail and not up) or not pk_ok or not th_ok: sys.exit(1)
+
+def thread_cards(lead, rest):
+    """🧵 WP-986 — صورتا ثريد حملات ترينديول ببصمة اليوم (cid=lead · rest). أيُّ عيبٍ مقيس ⇒ لا رفع (التغريدةُ بلا صورة لا بصورةٍ غلط)."""
+    if not lead: say("🧵 ماركةُ اليوم: ما فيه ماركة معروفة بثلاثة أقسام مقروءة — تنزل التجميعة"); return True
+    ok = True
+    try:
+        from tclead import render_lead, render_rest
+    except Exception as e:
+        say("   ❌ 🧵 tclead تعذّر:", repr(e)[:200]); return False
+    for cid, it, fn in (("lead", lead, lambda x: render_lead(x, fetch_img)), ("rest", rest, render_rest)):
+        if not it: continue
+        if it.get("fresh"): say(f"🧵 {cid}: مرسومةٌ ببصمة اليوم"); continue
+        try:
+            jpg, why = fn(it)
+        except Exception as e:
+            say(f"   ❌ 🧵 {cid}:", repr(e)[:200]); ok = False; continue
+        tag = (it.get("brand") or "") + f" · {len(it.get('items') or it.get('rows') or [])}"
+        if why: say(f"   🚫 🧵 {cid}", tag, "·", why); ok = False; continue
+        if DRY:
+            os.makedirs("out", exist_ok=True); open(os.path.join("out", f"tc{cid}.jpg"), "wb").write(jpg)
+            say(f"   🖌️ 🧵 {cid}", tag, f"{len(jpg)//1024}KB (جافّ)"); continue
+        st2, r = api_post("/api/tycamp/cards/upload", {"cid": cid, "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()})
+        if st2 == 200 and r.get("ok"): say(f"   ✅ 🧵 {cid}", tag, f"{len(jpg)//1024}KB")
+        else: say(f"   ❌ 🧵 {cid}", tag, st2, r.get("why") or r); ok = False
+    return ok
 
 def pack(it):
     """🧡 WP-980 — صورةُ تجميعة الحملات (أقوى ٤) ببصمة اليوم. أيُّ عيبٍ مقيس ⇒ لا رفع والمنشورُ بالبطاقات كما كان. True إن لم يفشل شيء."""
