@@ -58,6 +58,7 @@ h1{font-size:70px} h1 .g{color:#2f8f4e}
 .sub{color:#3f7a52;font-weight:700}
 .off{background:#e0662a}
 .box{background:#e3f3e6} .bl,.bv{color:#1f6b3c}
+body{--acc:#1f6b3c}
 .tip{background:#e3f3e6;border-color:#bfe0c6}
 """
 
@@ -72,6 +73,7 @@ h1 .g{color:#e5372b}
 .sub{color:#9a3a32;font-weight:700}
 .off{background:#e5372b}
 .box{background:#fde6e2} .bl,.bv{color:#b0201a}
+body{--acc:#b0201a}
 .tip{background:#fde6e2;border-color:#f3c4bd}
 """
 LAYOUT_CSS = {"ag1": CSS_AG, "ae1": CSS_AE}
@@ -203,18 +205,57 @@ def prep_guide_imgs(it, get=_img_get, say=print):
 
 
 
+def prep_card_imgs(it, get=_img_get, say=print):
+    """🖼️ WP-1004: صورُ التجميعات (ab1 · ag1 · ae1) — الحوافُّ البيضاء تُقصّ فيملأ المنتجُ مكانه (صورُ أمازون 500×500 والجزمةُ في ثلثها).
+    تعذّر التحميلُ أو القصّ ⇒ الرابطُ كما هو (كروم يحمّله كما كان) والسببُ في السجلّ. نفسُ الرابط ⇒ تحميلٌ واحد."""
+    from PIL import Image
+    seen = {}
+    for pg in it.get("pages") or []:
+        for p in pg.get("items") or []:
+            u = p.get("img") or ""
+            if not u.startswith("http"): continue
+            if u not in seen:
+                try:
+                    im = Image.open(io.BytesIO(get(u))); im.load()
+                    seen[u] = _uri(crop_white(im))
+                except Exception as e:
+                    seen[u] = u; say("   🖼️", str(p.get("name"))[:30], "⇐ ما انقصّت (الرابط كما هو):", repr(e)[:60])
+            p["img"] = seen[u]
+
+
 def cell(p, span=False):
-    # المقاساتُ بكسورها (43⅓) تنقلب في سطرٍ عربيّ («⅓43») ⇒ كلُّ مقاسٍ معزولٌ يسارًا بترتيبه
+    # 🖼️ WP-1004 (قوله 9/11 «اعتمد ونفذ بشكل جذري» بعد «ليش صور المنتجات صغار»): كانت الصورةُ عمودًا جانبيًّا عرضُه 170 من ~490
+    #   (الجزمة 170×85 في بطاقةٍ طولُها ~450) والسعرُ مكتوبٌ مرّتين (جنب الاسم + مربّع «السعر» الأصفر).
+    #   الآن: الصورةُ تملأ ما بقي من البطاقة (فوق أو جنب — يختار LAYOUT_PICK_JS الأكبرَ للمنتج) · حوافُّها البيضاء مقصوصة (prep_card_imgs)
+    #   · والسعرُ مرّةً واحدة «114.85 ريال بدل 335 -66%». المقاساتُ بكسورها (43⅓) معزولةٌ يسارًا بترتيبها كما كانت.
     sz = ('<div class="sz">📏 <span dir="ltr">%s</span></div>' % " · ".join('<bdi dir="ltr">%s</bdi>' % E(x) for x in str(p["sizes"]).split(" · "))) if p.get("sizes") else ""
     img = ('<img src="%s">' % E(p["img"])) if p.get("img") else ""
-    # 📺 WP-969: دليلُ الشراء — «بدل» ونسبتُها فقط حين يكون للسعر قبل · وخانةُ السعر تحمل وسمَ الموديل (الأرخص/الأفخم/الأكثر طلبًا)
     was = ('<span class="bd">بدل</span><span class="was">%s</span><span class="off" dir="ltr">-%s%%</span>' % (E(p.get("was")), E(p.get("pct")))) if p.get("was") not in (None, "") else ""
-    return ('<div class="card%s"><div class="pic">%s</div><div class="info">'
+    tag = ('<div class="ctg">%s</div>' % E(p["tag"])) if p.get("tag") else ""
+    return ('<div class="card%s">%s<div class="pic">%s</div><div class="info">'
             '<div class="nm">%s</div><div class="sub">%s</div>'
-            '<div class="pr"><span class="now">%s</span>%s</div>%s'
-            '<div class="box"><div class="bl">%s</div><div class="bv">%s</div></div></div></div>'
-            % (" span2" if span else "", img, E(p.get("name")), E(p.get("sub")), E(p.get("price")), was, sz,
-               E(p.get("tag") or "السعر"), E(p.get("price"))))
+            '<div class="pr"><span class="now">%s</span><span class="cur">ريال</span>%s</div>%s</div></div>'
+            % (" span2" if span else "", tag, img, E(p.get("name")), E(p.get("sub")), E(p.get("price")), was, sz))
+
+
+# 🖼️ WP-1004: قالبُ البطاقة — الصورةُ هي البطل. يُلحق بعد قالب الطبقة (ab1 · ag1 · ae1) فيعلو عليه، ولونُ السعر من --acc لكلِّ طبقة.
+CSS_CELL = """
+:root{--acc:#a07c11}
+.card{flex-direction:column;gap:8px;padding:14px 18px;position:relative}
+.card .pic{order:0;width:auto;flex:1 1 auto;min-height:0;position:relative}
+.card .pic img{position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;object-fit:contain}
+.card .info{order:1;flex:none}
+body.ph .card,.rows .card,.card.span2{flex-direction:row;gap:18px}
+body.ph .card .pic,.rows .card .pic,.card.span2 .pic{order:2;flex:0 0 44%;width:auto}
+body.ph .card .info,.rows .card .info,.card.span2 .info{flex:1;justify-content:center}
+.pr{align-items:baseline;margin-top:4px}
+.now{color:var(--acc);font-size:36px;line-height:1.15} .cur{font-size:19px;color:#666;font-weight:700}
+.pr .bd{margin-inline-start:6px}
+.box{display:none}
+.ctg{position:absolute;top:12px;right:12px;background:#1c1c1c;color:#f2c94c;border-radius:30px;padding:4px 14px;font-size:18px;font-weight:700;z-index:2}
+body.t1 .now{font-size:31px} body.t1 .cur{font-size:17px} body.t1 .card{gap:6px}
+body.t2 .now{font-size:27px} body.t2 .cur{font-size:15px} body.t2 .card{gap:4px;padding:12px 16px}
+"""
 
 
 def page_html(it, pg):
@@ -240,7 +281,7 @@ def page_html(it, pg):
             '%s'
             '<div class="subt">%s</div>%s'
             '<div class="foot"><div>الأسعار%s %s %s · تتغير بأي لحظة</div><div dir="ltr">@awalbawal_sa</div></div>'
-            '</body></html>') % (LAYOUT_CSS.get(it.get("layout"), CSS), E(it.get("store") or "أمازون"), E(it.get("pill")), h1, E(sub), grid,
+            '</body></html>') % (LAYOUT_CSS.get(it.get("layout"), CSS) + CSS_CELL, E(it.get("store") or "أمازون"), E(it.get("pill")), h1, E(sub), grid,
                                  " والمقاسات" if it.get("sized") else "", E(it.get("foot") or "من أمازون"), E(it.get("date")))
 
 
@@ -319,6 +360,35 @@ CARDS_FIT_JS = """() => {
   for (const c of ['t1', 't2']) { if (!tall()) break; document.body.classList.remove('t1'); document.body.classList.add(c); lv++; }
   return lv;
 }"""
+# 🖼️ WP-1004: الصورةُ فوق أو جنب؟ — تُقاس مساحةُ المنتج المرسومة فعلًا (بنسبة صورته بعد القصّ) في الوضعين، ويُختار الأكبرُ للصفحة كلّها
+#   (الجزمةُ والشنطة عريضة ⇒ فوق · العطرُ والجوال طويل ⇒ جنب). بطاقاتُ الصفّ العريض (rows · span2) جنبٌ دائمًا.
+PIC_MIN = 0.10      # أصغرُ نسبةٍ لمساحة المنتج من بطاقته
+PIC_AREA_JS = """() => [...document.querySelectorAll('.card')].map(c => {
+  const im = c.querySelector('.pic img'), b = c.querySelector('.pic');
+  if (!im || !b || !im.naturalWidth) return null;
+  const r = b.getBoundingClientRect(), k = Math.min(r.width / im.naturalWidth, r.height / im.naturalHeight);
+  return (im.naturalWidth * k) * (im.naturalHeight * k) / (c.clientWidth * c.clientHeight);
+})"""
+LAYOUT_PICK_JS = """() => {
+  const f = """ + PIC_AREA_JS + """;
+  const area = () => f().reduce((s, x) => s + (x || 0), 0);
+  const bad = () => [...document.querySelectorAll('.card')].some(c => c.scrollHeight > c.clientHeight + 2)
+    || [...document.querySelectorAll('.pr')].some(e => e.scrollWidth > e.clientWidth + 1)
+    || [...document.querySelectorAll('.info')].some(i => { const ir = i.getBoundingClientRect();
+         return [...i.querySelectorAll('*')].some(e => { const r = e.getBoundingClientRect(); return r.width && (r.left < ir.left - 1 || r.right > ir.right + 1); }); })
+    || [...document.querySelectorAll('.nm,.sz')].some(e => { const l = parseFloat(getComputedStyle(e).lineHeight); return Math.round(e.scrollHeight / l) <= 2 && e.scrollHeight > e.clientHeight + 0.5; });
+  const B = document.body.classList, set = (m, t) => { B.remove('ph', 't1', 't2'); if (m === 'ph') B.add('ph'); if (t) B.add(t); };
+  const tries = [];
+  // كلُّ تضييقٍ للنصّ له ثمن (الخطُّ يصغر) ⇒ لا يُختار إلّا إذا كبّر المنتجَ فعلًا: ×0.9 لـt1 و×0.78 لـt2
+  const W = {'': 1, t1: 0.9, t2: 0.78};
+  for (const m of ['pv', 'ph']) for (const t of ['', 't1', 't2']) { set(m, t); const ok = !bad(); tries.push({m, t, ok, a: area(), s: area() * W[t]}); }
+  const ok = tries.filter(x => x.ok);
+  const best = ok.length ? ok.reduce((x, y) => (y.s > x.s * 1.05 ? y : x)) : tries.find(x => x.m === 'pv' && x.t === 't2');
+  set(best.m, best.t);
+  const g = (m) => { const o = tries.filter(x => x.m === m && x.ok); return o.length ? Math.max(...o.map(x => x.a)) : null; };
+  const mins = f().filter(x => x != null);
+  return {min: mins.length ? +Math.min(...mins).toFixed(3) : null, mode: best.m, t: best.t, pv: g('pv') == null ? null : +g('pv').toFixed(3), ph: g('ph') == null ? null : +g('ph').toFixed(3)};
+}"""
 INSPECT_JS = """(H) => {
   const W = document.documentElement.clientWidth, out = [];
   const nm = (e) => '«' + (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 34) + '»';
@@ -354,6 +424,7 @@ def render_az(it, scale=2):
         pgw = b.new_page(viewport={"width": W, "height": H}, device_scale_factor=scale)
         guide = it.get("layout") == "gd1"
         if guide: prep_guide_imgs(it)   # 🖼️ WP-991: أنظفُ صورةٍ من معرض كلِّ موديل
+        elif it.get("layout") != "cp1": prep_card_imgs(it)   # 🖼️ WP-1004: حوافُّ صور التجميعات مقصوصة
         for pg in it.get("pages") or []:
             path = os.path.join(HERE, "_azcard_%d.html" % pg["page"])
             # ➕ WP-995: بطاقةُ المرافق بقالبها (cp1)
@@ -363,8 +434,15 @@ def render_az(it, scale=2):
             pgw.wait_for_timeout(700)
             broken = pgw.evaluate("[...document.images].filter(i=>!i.complete||!i.naturalWidth).length")
             pgw.evaluate(FIT_JS, FIT_MIN)
+            lp = None
+            if not guide and it.get("layout") != "cp1":
+                lp = pgw.evaluate(LAYOUT_PICK_JS)
+                print("   📐 صفحة", pg["page"], "⇐ الصورة", "جنب" if lp["mode"] == "ph" else "فوق", ("· تضييق " + lp["t"]) if lp["t"] else "", "· مساحة المنتج: فوق", lp["pv"], "· جنب", lp["ph"], "· أصغر بطاقة", lp["min"])
             pgw.evaluate(CARDS_FIT_JS)
             over = pgw.evaluate(INSPECT_JS, H)
+            # 🖼️ WP-1004: حارسُ «صورة صغيرة» — منتجٌ يأخذ أقلَّ من عُشر بطاقته (القديم كان 0.09–0.12 · الجديد ≥0.13 مقيس 9/11) ⇒ عيبٌ يوقف الصفحة
+            if lp and lp.get("min") is not None and lp["min"] < PIC_MIN:
+                over = list(over) + ["صورة المنتج صغيرة في بطاقتها (%d%% من البطاقة — الحد %d%%)" % (round(lp["min"] * 100), round(PIC_MIN * 100))]
             png = pgw.screenshot(clip={"x": 0, "y": 0, "width": W, "height": H})
             im = Image.open(io.BytesIO(png)).convert("RGB")
             assert im.size == (W * scale, H * scale), im.size
