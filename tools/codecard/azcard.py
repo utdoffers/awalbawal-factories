@@ -330,6 +330,133 @@ def comp_html(it, pg):
                                  cp_cell(main, "cp-main", "🔥 الصيدة"), E(it.get("lead")), E(it.get("why") or ""), cp_cell(comp, "cp-comp"),
                                  ('<div class="cbox">%s</div>' % box) if box else "", E(it.get("date")))
 
+# 🖼️ ═══ WP-1005 (D-295) — بطاقةُ التجميعة المخلوطة (قالب mx1 · نوفمبر الفاتح) ═══
+#   قوله 9/11 «الوضع المهم ليس ما فيهم صور» ثمّ «طيب طبق الشعار وعطني تصور» ثمّ «ابني» على التصوّر:
+#   لكلِّ متجرٍ خانة — شعارُه (أوّلُ مصدرٍ يتحمّل بحجمٍ يُقرأ) وإلّا الحرفُ بلونه · الاسم · الوصف · الكودُ بشريطٍ أسود
+#   أو «بدون كود — ادخل من رابطه في التغريدة». كلُّ نصٍّ هنا من الخادم (lib/mixcard.js · mxCardItem).
+CSS_MX = """
+@font-face{font-family:Plex;src:url('%s');font-weight:400}
+@font-face{font-family:Plex;src:url('%s');font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:%dpx;height:%dpx;overflow:hidden}
+body{background:#f3f2ef;font-family:Plex,sans-serif;direction:rtl;color:#141414;padding:36px 40px 0;position:relative}
+.top{display:flex;justify-content:space-between;align-items:center;height:62px}
+.brand{font-size:30px;font-weight:700} .brand b{color:#e3a521;margin-left:10px}
+.pill{background:#151515;color:#fff;border-radius:40px;padding:12px 28px;font-size:23px;font-weight:700} .pill span{color:#e3a521}
+h1{font-size:60px;font-weight:700;line-height:1.15;margin-top:22px;white-space:nowrap} h1 .g{color:#e3a521} h1 .pg{color:#9a948a;font-size:.5em;margin-right:12px}
+.subt{font-size:23px;color:#6d6b66;margin-top:10px;display:flex;gap:18px;align-items:center;white-space:nowrap}
+.subt i{width:12px;height:12px;border-radius:50%%;display:inline-block;margin-left:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px}
+.card{background:#fff;border-radius:28px;height:318px;padding:26px 26px 22px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.n4 .card{height:480px} .n4 .lg{height:150px} .n4 .lg img{max-height:130px} .n4 .lg img.wide{max-height:80px;max-width:330px}
+.tag{position:absolute;top:22px;left:22px;font-size:18px;font-weight:700;border-radius:30px;padding:5px 16px}
+.tag.c{background:#fdecc4;color:#9a6a00} .tag.l{background:#e4f2e7;color:#1f6b3c}
+.lg{height:96px;display:flex;align-items:center;justify-content:flex-start;padding-left:120px}
+.lg img{max-height:84px;max-width:220px;object-fit:contain;display:block}
+.lg img.wide{max-height:52px;max-width:250px} .lg img.sq{border-radius:20px}
+.mono{width:84px;height:84px;border-radius:22px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:44px;font-weight:700;padding-bottom:6px}
+.nm{font-size:30px;font-weight:700;line-height:1.6;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds{font-size:21px;color:#6d6b66;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{margin-top:auto;border-radius:20px;height:84px;display:flex;align-items:center;justify-content:space-between;padding:0 18px 0 14px;flex:none}
+.bar.c{background:#151515} .bar.c .lb{color:#cfcac0;font-size:20px;line-height:1.3;min-width:0;overflow:hidden}
+.bar.c .lb b{color:#fff;font-size:22px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.code{background:#e3a521;color:#151515;font-weight:700;font-size:38px;border-radius:14px;padding:4px 22px;letter-spacing:2px;direction:ltr;white-space:nowrap;flex:none;margin-right:12px}
+.bar.l{background:#f1f0ec;justify-content:flex-start;padding:0 22px}
+.bar.l .lb{font-size:22px;color:#1f6b3c;font-weight:700;display:flex;align-items:center;gap:10px;line-height:1.35}
+.bar.l .lb small{display:block;font-size:18px;color:#6d6b66;font-weight:400}
+.foot{position:absolute;bottom:26px;right:40px;left:40px;display:flex;justify-content:space-between;font-size:19px;color:#8a877f}
+""" % (F400, F700, W, H)
+MX_LINK = '<svg width="24" height="24" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" stroke="#1f6b3c" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>'
+
+
+def mx_tile(t):
+    import json as _j
+    c = t.get("k") == "c"
+    mono = '<div class="mono" style="background:%s">%s</div>' % (E(t.get("col") or "#1d1d1f"), E(t.get("ini") or "؟"))
+    lg = '<div class="lg" data-logos="%s">%s</div>' % (E(_j.dumps(t.get("logos") or [])), mono)
+    ds = ('<div class="ds">%s</div>' % E(t.get("desc"))) if t.get("desc") else ""
+    if c:
+        import re as _re
+        off = _re.sub(r"(\d+(?:[.,]\d+)?\s*%)", r'<bdi dir="ltr">\1</bdi>', E(t.get("off") or "كود خصم"))   # «خصم 10%» لا «%10 خصم»
+        bar = '<div class="bar c"><div class="lb"><b><bdi>%s</bdi></b>انسخه عند الدفع</div><div class="code">%s</div></div>' % (off, E(t.get("code")))
+    else:
+        bar = '<div class="bar l"><div class="lb">%s<span>بدون كود<small>ادخل من رابطه في التغريدة</small></span></div></div>' % MX_LINK
+    return '<div class="card"><span class="tag %s">%s</span>%s<div class="nm">%s</div>%s%s</div>' % (
+        "c" if c else "l", "كود" if c else "رابط مباشر", lg, E(t.get("name")), ds, bar)
+
+
+def mix_html(it, pg):
+    items = pg.get("items") or []
+    sub = []
+    if it.get("n_code"): sub.append('<span><i style="background:#e3a521"></i>%s أكواد متحقَّقة اليوم</span>' % E(it.get("n_code")))
+    if it.get("n_link"): sub.append('<span><i style="background:#1f6b3c"></i>%s متاجر برابط مباشر</span>' % E(it.get("n_link")))
+    pgn = ('<span class="pg">(%d/%d)</span>' % (pg["page"], pg["of"])) if pg.get("of", 1) > 1 else ""
+    return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body class="%s">'
+            '<div class="top"><div class="brand"><b>✓</b>العروض أول بأول</div><div class="pill">%s · <span>%s</span></div></div>'
+            '<h1>%s <span class="g">%s</span>%s</h1><div class="subt">%s</div><div class="grid">%s</div>'
+            '<div class="foot"><span>%s</span><span dir="ltr">@awalbawal_sa</span></div></body></html>') % (
+        CSS_MX, "n4" if len(items) <= 4 else "", E(it.get("pill")), E(it.get("theme")), E(it.get("hl")), E(it.get("gold")), pgn,
+        "".join(sub), "".join(mx_tile(t) for t in items), E(it.get("foot")))
+
+
+def mx_trim(im, pad=0.03):
+    """يقصّ الحوافَّ الفاضية (شفّافة أو بيضاء) حول الشعار — أيقونةُ ليفل شوز 225×225 شعارُها في وسطها الصغير. نقيّة."""
+    from PIL import Image, ImageChops
+    im = im.convert("RGBA")
+    flat = Image.alpha_composite(Image.new("RGBA", im.size, (255, 255, 255, 255)), im).convert("RGB")
+    diff = ImageChops.difference(flat, Image.new("RGB", im.size, (255, 255, 255))).convert("L").point(lambda x: 255 if x > 18 else 0)
+    box = diff.getbbox()
+    if not box: return im
+    w, h = im.size; px, py = int(w * pad), int(h * pad)
+    return im.crop((max(0, box[0] - px), max(0, box[1] - py), min(w, box[2] + px), min(h, box[3] + py)))
+
+
+def prep_mx_logos(it, get=_img_get, say=print):
+    """🏷️ WP-1005: لكلِّ خانة أوّلُ شعارٍ يتحمّل هنا ⇒ مقصوصُ الحواف (PNG مضمَّن) · و«favicon» يُتخطّى (أيقونةُ متصفّح لا شعار —
+    أوناس دائرةٌ بلا اسم) · وsvg يمرّ لكروم كما هو. ما تحمّل منها شيء ⇒ قائمةٌ فاضية ⇒ الحرفُ بلونه."""
+    import base64, re
+    from PIL import Image
+    for pg in it.get("pages") or []:
+        for t in pg.get("items") or []:
+            out = []
+            for u in t.get("logos") or []:
+                if re.search(r"favicon", u, re.I): say("   ↷", t.get("name"), "أيقونة متصفّح لا شعار"); continue
+                if re.search(r"\.svg(\?|$)", u, re.I): out.append(u); continue
+                try:
+                    im = Image.open(io.BytesIO(get(u))); im.load()
+                except Exception as e:
+                    say("   ↷", t.get("name"), "ما تحمّل الشعار:", str(e)[:60]); continue
+                if max(im.size) < MX_LOGO_MIN: say("   ↷", t.get("name"), "شعارٌ صغير", im.size); continue
+                im = mx_trim(im); im.thumbnail((640, 640))
+                buf = io.BytesIO(); im.save(buf, "PNG", optimize=True)
+                out.append("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()); break
+            t["logos"] = out
+
+
+# الشعار: أوّلُ مصدرٍ يتحمّل بعرضٍ يُقرأ (≥ 96 — أيقونةُ 32 تتغبّش) يُرسم مكان الحرف · مستطيلٌ عريض ⇒ wide · مربّعٌ ⇒ حوافّ مدوّرة.
+# ما تحمّل منها شيء (موقعٌ يحجب · رابطٌ مات) ⇒ يبقى الحرفُ بلونه. يعيد عددَ الشعارات المرسومة من الكلّ.
+MX_LOGO_MIN = 96
+MX_LOGO_JS = """async (minw) => {
+  const load = (u) => new Promise((res) => { const im = new Image(); const t = setTimeout(() => res(null), 9000);
+    im.onload = () => { clearTimeout(t); res(im); }; im.onerror = () => { clearTimeout(t); res(null); }; im.src = u; });
+  let drawn = 0, all = 0;
+  for (const box of document.querySelectorAll('.lg')) {
+    all++;
+    let list = []; try { list = JSON.parse(box.dataset.logos || '[]'); } catch (e) {}
+    for (const u of list) {
+      const im = await load(u);
+      if (!im) continue;
+      const svg = /\\.svg(\\?|$)/i.test(u);
+      if (!svg && im.naturalWidth < minw && im.naturalHeight < minw) continue;
+      const r = (im.naturalWidth || 3) / (im.naturalHeight || 1);
+      im.className = r >= 2.2 ? 'wide' : (r > 0.8 && r < 1.25 ? 'sq' : '');
+      box.innerHTML = ''; box.appendChild(im); drawn++; break;
+    }
+  }
+  return {drawn, all};
+}"""
+
+
 # 🖼️ ═══ WP-973 — العنوانُ يدخل في الصفحة دائمًا، والحارسُ يرى ما يراه القارئ ═══
 #   قوله 2026-11-06 «١ بشكل جذري» بعد تجميعة 18:41: «ماركات الإلكترونيات بخصم يوصل 66%» عرضُه 1199 على 996 ⇒ انقصّ الرقم،
 #   والحارسُ القديم كان يقيس الطولَ وحده فمرّت. ٩ من ١٠ مجالات كانت تطلع برّا بخطّ 76.
@@ -423,19 +550,24 @@ def render_az(it, scale=2):
         b = pw.chromium.launch()
         pgw = b.new_page(viewport={"width": W, "height": H}, device_scale_factor=scale)
         guide = it.get("layout") == "gd1"
+        mx = it.get("layout") == "mx1"   # 🖼️ WP-1005: بطاقةُ المخلوطة — شعاراتٌ لا صورُ منتجات
         if guide: prep_guide_imgs(it)   # 🖼️ WP-991: أنظفُ صورةٍ من معرض كلِّ موديل
-        elif it.get("layout") != "cp1": prep_card_imgs(it)   # 🖼️ WP-1004: حوافُّ صور التجميعات مقصوصة
+        elif mx: prep_mx_logos(it)      # 🏷️ WP-1005: الشعاراتُ مقصوصةُ الحواف · الأيقوناتُ الصغيرة تُتخطّى
+        elif it.get("layout") not in ("cp1", "mx1"): prep_card_imgs(it)   # 🖼️ WP-1004: حوافُّ صور التجميعات مقصوصة
         for pg in it.get("pages") or []:
             path = os.path.join(HERE, "_azcard_%d.html" % pg["page"])
             # ➕ WP-995: بطاقةُ المرافق بقالبها (cp1)
-            html_ = comp_html(it, pg) if it.get("layout") == "cp1" else (guide_html(it, pg) if guide else page_html(it, pg))
+            html_ = mix_html(it, pg) if mx else (comp_html(it, pg) if it.get("layout") == "cp1" else (guide_html(it, pg) if guide else page_html(it, pg)))
             open(path, "w", encoding="utf-8").write(html_)
             pgw.goto("file://" + path, wait_until="networkidle", timeout=60000)
             pgw.wait_for_timeout(700)
+            if mx:
+                lg = pgw.evaluate(MX_LOGO_JS, MX_LOGO_MIN)
+                print("   🏷️ صفحة", pg["page"], "⇐ الشعارات", lg["drawn"], "من", lg["all"], "· الباقي بالحرف")
             broken = pgw.evaluate("[...document.images].filter(i=>!i.complete||!i.naturalWidth).length")
             pgw.evaluate(FIT_JS, FIT_MIN)
             lp = None
-            if not guide and it.get("layout") != "cp1":
+            if not guide and it.get("layout") not in ("cp1", "mx1"):
                 lp = pgw.evaluate(LAYOUT_PICK_JS)
                 print("   📐 صفحة", pg["page"], "⇐ الصورة", "جنب" if lp["mode"] == "ph" else "فوق", ("· تضييق " + lp["t"]) if lp["t"] else "", "· مساحة المنتج: فوق", lp["pv"], "· جنب", lp["ph"], "· أصغر بطاقة", lp["min"])
             pgw.evaluate(CARDS_FIT_JS)

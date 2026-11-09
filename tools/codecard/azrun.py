@@ -23,7 +23,9 @@ KINDS = [("azbrands", lambda: api("/api/azbrands/card/todo"), lambda b: api_post
          # 📺 WP-969: دليلُ شراء علي إكسبريس (23:00 الحسم · 23:30 النشر) بقالب ae1 وعنوان الدليل
          ("aeguide", lambda: api("/api/aeguide/card/todo"), lambda b: api_post("/api/aeguide/card/upload", b), "📺", "ag2"),
          # ➕ WP-995: بطاقاتُ المرافق (الصيدة + ما يكمّلها) بقالب cp1 — عدّةُ بطاقاتٍ في الدورة (لكلِّ صيدةٍ بطاقة)
-         ("companion", lambda: api("/api/companion/card/todo"), lambda b: api_post("/api/companion/card/upload", b), "➕", "cp")]
+         ("companion", lambda: api("/api/companion/card/todo"), lambda b: api_post("/api/companion/card/upload", b), "➕", "cp"),
+         # 🖼️ WP-1005 (D-295): بطاقةُ التجميعة المخلوطة (الصبح 10:00 · المغرب 19:00) بقالب mx1 — بندٌ لكلِّ خانة ببصمة خطّتها
+         ("mixcard", lambda: api("/api/mixcard/card/todo"), lambda b: api_post("/api/mixcard/card/upload", b), "🧺", "mx")]
 
 
 def one(route, todo, upload, icon, pre):
@@ -52,7 +54,8 @@ def one(route, todo, upload, icon, pre):
             os.makedirs("out", exist_ok=True)
             open(os.path.join("out", f"{pre}_{str(it.get('sig') or '')[:6]}_{page}.jpg" if len(todo_items) > 1 else f"{pre}_{page}.jpg"), "wb").write(jpg)
             say("   🖌️", tag, "(جافّ)"); continue
-        st2, r = upload({"sig": it["sig"], "page": page, "jpg": base64.b64encode(jpg).decode()})
+        # 🖼️ WP-1005: بطاقةُ المخلوطة ترفع خانتَها (am · pm) — والبقيّةُ كما كانت حرفًا
+        st2, r = upload({"sig": it["sig"], "page": page, "jpg": base64.b64encode(jpg).decode(), **({"slot": it["slot"]} if it.get("slot") else {})})
         if st2 == 200 and r.get("ok"): up += 1; say("   ✅", tag)
         else: fail += 1; say("   ❌", tag, st2, r.get("why") or r)
     say(f"🧾 {route}: رُفعت {up} · فشلت {fail}")
