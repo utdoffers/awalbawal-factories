@@ -490,6 +490,25 @@ CARDS_FIT_JS = """() => {
 # 🖼️ WP-1004: الصورةُ فوق أو جنب؟ — تُقاس مساحةُ المنتج المرسومة فعلًا (بنسبة صورته بعد القصّ) في الوضعين، ويُختار الأكبرُ للصفحة كلّها
 #   (الجزمةُ والشنطة عريضة ⇒ فوق · العطرُ والجوال طويل ⇒ جنب). بطاقاتُ الصفّ العريض (rows · span2) جنبٌ دائمًا.
 PIC_MIN = 0.10      # أصغرُ نسبةٍ لمساحة المنتج من بطاقته
+# 🖼️ WP-1015 (قوله 10/11 «١» بعد تجميعة البقالة 15:21 نزلت بصور المنتجات): الحارسُ كان يقيس المساحةَ وحدها فصرخ في صورةٍ سليمة —
+#   قارورةُ زيت نادك نحيفةٌ طويلة في بطاقة سطرٍ عريضة (992×293): تملأ 85% من طول بطاقتها (أكبرُ ما يمكن) ومساحتُها 6% ⇒ منع الصفحةَ الثانية
+#   فنزلت التجميعةُ كلُّها بصور المنتجات (وماركاتُ أمازون 7% نفسَ اليوم). «صغيرة» الآن = مساحتُها أقلُّ من PIC_MIN **و**ما تملأ
+#   PIC_FILL من طول بطاقتها ولا من عرضها — فالجزمةُ القديمةُ 170×85 في 490×450 (تملأ 35%) تُمسك كما كانت، والقارورةُ الطويلة تمرّ.
+PIC_FILL = 0.60     # أقلُّ ما يملؤه المنتجُ من طول بطاقته أو عرضها حتى لا يُعدّ صغيرًا ولو كانت مساحتُه أقلَّ من PIC_MIN
+PIC_FILL_JS = """() => [...document.querySelectorAll('.card')].map(c => {
+  const im = c.querySelector('.pic img'), b = c.querySelector('.pic');
+  if (!im || !b || !im.naturalWidth) return null;
+  const r = b.getBoundingClientRect(), k = Math.min(r.width / im.naturalWidth, r.height / im.naturalHeight);
+  const w = im.naturalWidth * k, h = im.naturalHeight * k;
+  return {a: +(w * h / (c.clientWidth * c.clientHeight)).toFixed(3), f: +Math.max(w / c.clientWidth, h / c.clientHeight).toFixed(2),
+          nm: ((c.querySelector('.nm') || {}).textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 30)};
+})"""
+
+
+def pic_small(cards, amin=None, fmin=None):
+    """🖼️ WP-1015: البطاقاتُ التي منتجُها صغيرٌ فعلًا — مساحتُه < amin **و** ما يملأ fmin من طولها ولا عرضها."""
+    amin = PIC_MIN if amin is None else amin; fmin = PIC_FILL if fmin is None else fmin
+    return [x for x in (cards or []) if x and x.get("a") is not None and x["a"] < amin and x.get("f", 0) < fmin]
 PIC_AREA_JS = """() => [...document.querySelectorAll('.card')].map(c => {
   const im = c.querySelector('.pic img'), b = c.querySelector('.pic');
   if (!im || !b || !im.naturalWidth) return null;
@@ -572,9 +591,11 @@ def render_az(it, scale=2):
                 print("   📐 صفحة", pg["page"], "⇐ الصورة", "جنب" if lp["mode"] == "ph" else "فوق", ("· تضييق " + lp["t"]) if lp["t"] else "", "· مساحة المنتج: فوق", lp["pv"], "· جنب", lp["ph"], "· أصغر بطاقة", lp["min"])
             pgw.evaluate(CARDS_FIT_JS)
             over = pgw.evaluate(INSPECT_JS, H)
-            # 🖼️ WP-1004: حارسُ «صورة صغيرة» — منتجٌ يأخذ أقلَّ من عُشر بطاقته (القديم كان 0.09–0.12 · الجديد ≥0.13 مقيس 9/11) ⇒ عيبٌ يوقف الصفحة
-            if lp and lp.get("min") is not None and lp["min"] < PIC_MIN:
-                over = list(over) + ["صورة المنتج صغيرة في بطاقتها (%d%% من البطاقة — الحد %d%%)" % (round(lp["min"] * 100), round(PIC_MIN * 100))]
+            # 🖼️ WP-1004: حارسُ «صورة صغيرة» ⇒ عيبٌ يوقف الصفحة · 🖼️ WP-1015: يُقاس بعد التضييق (ما يراه القارئ) وبالمساحة **والامتلاء** معًا
+            if lp:
+                for x in pic_small(pgw.evaluate(PIC_FILL_JS)):
+                    over = list(over) + ["صورة المنتج صغيرة في بطاقتها «%s» (%d%% من البطاقة وتملأ %d%% من طولها أو عرضها — الحد %d%% أو %d%%)"
+                                         % (x["nm"], round(x["a"] * 100), round(x["f"] * 100), round(PIC_MIN * 100), round(PIC_FILL * 100))]
             png = pgw.screenshot(clip={"x": 0, "y": 0, "width": W, "height": H})
             im = Image.open(io.BytesIO(png)).convert("RGB")
             assert im.size == (W * scale, H * scale), im.size

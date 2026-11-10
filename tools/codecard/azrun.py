@@ -28,6 +28,11 @@ KINDS = [("azbrands", lambda: api("/api/azbrands/card/todo"), lambda b: api_post
          ("mixcard", lambda: api("/api/mixcard/card/todo"), lambda b: api_post("/api/mixcard/card/upload", b), "🧺", "mx")]
 
 
+# 🖼️ WP-1015: الأبوابُ التي تقبل «صفحة انمنعت» (lib/azcard.js acUpload · blocked) — فيعرف الخادمُ فورًا أنّ التصميمَ ناقصٌ وسببَه،
+#   فتنزل الصفحاتُ السليمة تصميمًا والممنوعةُ بصور منتجاتها، ويرنّ الجرس «card_short». المرافقُ والمخلوطةُ لهما أبوابٌ غيرُها.
+BLOCK_REPORT = {"azbrands", "azgrocery", "aebrands", "aeguide"}
+
+
 def one(route, todo, upload, icon, pre):
     st, t = todo()
     if st != 200 or not t.get("ok"):
@@ -49,7 +54,12 @@ def one(route, todo, upload, icon, pre):
         #   ⇐ التجميعةُ تنزل بصور المنتجات (احتياطُ WP-962) بدل صورةٍ مقصوصة. السببُ مكتوبٌ في السجلّ بكلماته.
         if over:
             for why in over: say("   🚫", tag, "·", why)
-            if not DRY: fail += 1; continue
+            if not DRY:
+                fail += 1
+                if route in BLOCK_REPORT:
+                    st3, r3 = upload({"sig": it["sig"], "page": page, "blocked": " · ".join(over)[:300]})
+                    say("   📮 بلّغ الخادم إن الصفحة انمنعت:", "وصل" if st3 == 200 and r3.get("ok") else (st3, r3.get("why") or r3))
+                continue
         if DRY:
             os.makedirs("out", exist_ok=True)
             open(os.path.join("out", f"{pre}_{str(it.get('sig') or '')[:6]}_{page}.jpg" if len(todo_items) > 1 else f"{pre}_{page}.jpg"), "wb").write(jpg)
