@@ -9,6 +9,12 @@
   ④ يضغطه تحت سقف الخادم (~١ ميغا) ⇒ POST /api/az/video/put   (أو سببُ التعذّر)
 
 قواعدُه: لا يكتب سعرًا ولا خصمًا على المقطع (السعرُ يتغيّر والتغريدةُ تحمله) · كلُّ تعذّرٍ يُرفع بسببه.
+
+🎯 WP-1023 (قوله 2026-11-11 «١ مع ٣» بعد تغريدة الكرسي: القصُّ كان الثانية 1→11 دائمًا والكرسي كاملًا في 14→22):
+  ③ب لوحةُ لقطاتٍ مرقّمة (لقطةٌ لكلِّ ثانية) ⇒ POST /api/az/video/pick ⇒ أيُّ الثواني فيها المنتجُ كامل
+  ③ج القصُّ من النافذة الأغنى بتلك الثواني، ويبدأ بواحدةٍ منها (`window`)
+  ③د ولا ثانية ⇒ `skip` ⇒ الصيدةُ تخرج بصورتها · وتعذّرُ الحكم ⇒ خطأٌ عاديّ يُعاد — لا رجوعَ للقصّ الأعمى
+  وأيُّ مقطعٍ ليس قريبًا من 9:16 (مثل 3:4) يُعرض كاملًا على خلفيّةٍ مغبّشة بدل قصّ جانبيه.
 """
 import os, re, sys, json, base64, argparse, subprocess, tempfile, urllib.request, urllib.error
 
@@ -19,6 +25,9 @@ TT_KEY = os.environ.get("TT_BOT_KEY", "")
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36 AwalbawalAzVideo/1.0"
 W, H = 720, 1280
 CLIP = 10.0                 # ثوانٍ
+MIN_CLIP = 6.0              # 🎯 WP-1023: أقصرُ نافذةٍ نقبلها لنبدأ من لقطة المنتج كامل
+TALL_MAX = 0.62             # 🎯 WP-1023: عرض÷طول فوق هذا (أعرض من 9:16 بوضوح، مثل 3:4) ⇒ يُعرض كاملًا بخلفيّةٍ مغبّشة
+SHEET_COLS, TILE_W = 8, 180
 MAX_B64 = 1_350_000         # سقفُ الخادم 1.4 مليون حرف (lib/azvideo.js) — وهامش
 PILL = "أول بأول · الرابط في التغريدة"
 
@@ -100,6 +109,36 @@ def render(src, png, out, start, clip, horiz=False):
         if len(b64) <= MAX_B64: return b64, None
     return None, "المقطعُ أكبرُ من سقف الخادم حتى بأقلّ جودة"
 
+def sheet(src, real, tmp):
+    """🎯 WP-1023: لوحةُ لقطاتٍ مرقّمة — اللقطةُ رقم k هي الثانية k من المقطع. ⇒ (data-uri, عددُ اللقطات)"""
+    from PIL import Image, ImageDraw, ImageFont
+    d = os.path.join(tmp, "fr"); os.makedirs(d, exist_ok=True)
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-t", f"{min(real, 40.0):.2f}", "-vf", f"fps=1,scale={TILE_W}:-2",
+                        "-q:v", "4", os.path.join(d, "f_%03d.jpg")], capture_output=True)
+    fs = sorted(x for x in os.listdir(d) if x.endswith(".jpg"))
+    if r.returncode != 0 or not fs: raise RuntimeError("ما طلعت لقطاتٌ من المقطع: " + r.stderr.decode("utf-8", "replace")[-120:])
+    fs = fs[:60]
+    th = Image.open(os.path.join(d, fs[0])).size[1]
+    rows = (len(fs) + SHEET_COLS - 1) // SHEET_COLS
+    im = Image.new("RGB", (SHEET_COLS * (TILE_W + 6), rows * (th + 6)), (30, 30, 30)); dr = ImageDraw.Draw(im)
+    f = ImageFont.truetype(os.path.join(FONTS, "plexfull-700.ttf"), 30)
+    for i, n in enumerate(fs):
+        x, y = (i % SHEET_COLS) * (TILE_W + 6) + 3, (i // SHEET_COLS) * (th + 6) + 3
+        im.paste(Image.open(os.path.join(d, n)).convert("RGB"), (x, y))
+        dr.rectangle((x, y, x + 52, y + 40), fill=(254, 190, 16)); dr.text((x + 26, y + 20), str(i), font=f, fill=(0, 0, 0), anchor="mm")
+    out = os.path.join(tmp, "sheet.jpg"); im.save(out, quality=72)
+    return "data:image/jpeg;base64," + base64.b64encode(open(out, "rb").read()).decode(), len(fs)
+
+def window(whole, real, clip_max=CLIP, min_clip=MIN_CLIP):
+    """🎯 WP-1023: النافذةُ الأغنى بثواني «المنتج كامل»، والتعادلُ لمن تبدأ بواحدةٍ منها ثمّ للأبكر. ⇒ (البداية, الطول)"""
+    W = set(int(k) for k in whole); best = None
+    for s in range(0, max(0, int(real - min(min_clip, real))) + 1):
+        clip = min(clip_max, real - s)
+        if clip < min(min_clip, real) - 1e-6: continue
+        score = (sum(1 for k in W if s <= k < s + clip), 1 if s in W else 0, -s)
+        if best is None or score > best[0]: best = (score, float(s), clip)
+    return (best[1], best[2]) if best else (0.0, min(clip_max, real))
+
 def one(job, dry=False):
     a, m3u8 = job["asin"], job["m3u8"]
     dur = float(job.get("dur") or 0)
@@ -117,8 +156,19 @@ def one(job, dry=False):
         p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src], capture_output=True)
         real = float((p.stdout.decode().strip() or "0").split("\n")[0] or 0)
         if real < 4: raise RuntimeError(f"المقطعُ قصيرٌ جدًّا ({real:.1f}ث)")
-        start = 1.0 if real >= CLIP + 2 else 0.0      # ثانيةُ البداية غالبًا شاشةٌ فارغة أو شعار
-        clip = min(CLIP, real - start)
+        # 🎯 WP-1023: كان «start = 1 دائمًا» (قصٌّ أعمى) ⇒ الآن من حيث يبان المنتجُ كامل
+        uri_sheet, n = sheet(src, real, tmp)
+        pk = api_post("/api/az/video/pick", {"asin": a, "sheet": uri_sheet, "n": n})
+        if not pk.get("ok"): raise RuntimeError(pk.get("why") or "تعذّر الحكم على اللقطات")
+        whole = pk.get("whole") or []
+        say(f"   🎯 المنتجُ كامل في {len(whole)} من {n} ثانية: {whole}" + (" (بصورة المرجع)" if pk.get("ref") else ""))
+        if not whole:
+            # ③ الحارس (قوله «٣»): ولا لقطة ⇒ لا مقطع، والصيدةُ بصورتها
+            if dry: say("   🧪 جافّ: ولا لقطة ⇒ بالصورة"); return True
+            api_post("/api/az/video/put", {"asin": a, "skip": pk.get("note") or "ولا لقطة"})
+            say("   🙈 ولا لقطة يبان فيها المنتج كامل ⇒ تخرج بصورتها"); return True
+        start, clip = window(whole, real)
+        say(f"   ✂️ من {start:.0f}ث لمدّة {clip:.1f}ث")
         pill(png)
         probed = False
         if not wh:
@@ -127,7 +177,9 @@ def one(job, dry=False):
                 pw, ph = (int(x) for x in q.stdout.decode().strip().split("\n")[0].split(",")[:2]); wh = (pw, ph); probed = True; say(f"   📐 {pw}x{ph}")
             except Exception: pass
         # مربّعُ علي إكسبريس (المقيس بـffprobe) يُعامَل كالعرضيّ: كاملًا وسطَ الشاشة بخلفيّةٍ مغبّشة — وأمازون كما كان حرفًا
-        horiz = bool(wh and (wh[0] > wh[1] or (probed and wh[0] == wh[1]))) or (int(job.get("w") or 0) > int(job.get("h") or 0))
+        # 🎯 WP-1023: كلُّ ما هو أعرضُ من 9:16 بوضوح (3:4 · مربّع · عرضيّ) يُعرض كاملًا — كان 3:4 يُقصّ ربعُ عرضه
+        jw, jh = int(job.get("w") or 0), int(job.get("h") or 0)
+        horiz = bool(wh and wh[1] and wh[0] / wh[1] > TALL_MAX) or bool(jh and jw / jh > TALL_MAX)
         if horiz: say("   ↔️ عرضيّ — وسطَ شاشةٍ طوليّة بخلفيّةٍ مغبّشة")
         b64, err = render(src, png, out, start, clip, horiz)
         if not b64: raise RuntimeError(err)
