@@ -9,6 +9,7 @@
 # 🏷️ WP-967: وماركاتِ علي إكسبريس (قالب ae1 الأحمر · الحسم 10:00 · النشر 10:30) — نفسُ المصنع ونفسُ النداء.
 # 🖼️ WP-1005 (D-295): وبطاقةَ التجميعة المخلوطة (قالب mx1 · الصبح والمغرب) — نفسُ المصنع ونفسُ النداء (lib/mixcard.js · mxTick).
 # 📺 WP-969: ودليلَ شراء علي إكسبريس (قالب ae1 بعنوان الدليل · الحسم 23:00 · النشر 23:30) — نفسُ المصنع ونفسُ النداء.
+# 🏭 WP-1037: «تجهيز» عبر tools/ci-chromium.sh (لا يعتمد على مرايا أوبونتو) · وإذا فشلت دورةُ النداء يعيد النظامُ النداء (lib/nidaa.js · nidaaWatch).
 # 🔑 TT_BOT_KEY — نفسُ سرِّ مصانع البطاقات، ويرى أبوابَه المسمّاة فقط (azbrands/card/todo · upload).
 ########################################################################
 name: تصميم ماركات أمازون
@@ -33,6 +34,7 @@ on:
       - ".github/workflows/az-cards.yml"
       - "tools/codecard/azcard.py"
       - "tools/codecard/azrun.py"
+      - "tools/ci-chromium.sh"
   workflow_dispatch:
     inputs:
       dry:
@@ -51,9 +53,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: تجهيز
+        timeout-minutes: 12   # 🏭 WP-1037: سقفٌ للخطوة (أسوأ حالات ci-chromium.sh ٩ دقائق · العادي أقل من دقيقة)
         run: |
           pip install --quiet "Pillow>=10" playwright
-          python3 -m playwright install --with-deps chromium >/dev/null
+          bash tools/ci-chromium.sh   # 🏭 WP-1037: playwright install بمهلةٍ وإعادة — 11/11 علّق ١٠ د وطاح لمّا apt ما وصل مرايا أوبونتو
       - name: رسمٌ وإيداع
         env:
           TT_BOT_KEY: ${{ secrets.TT_BOT_KEY }}
