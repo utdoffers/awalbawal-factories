@@ -42,6 +42,11 @@ h1{font-weight:700;font-size:76px;line-height:1.15;margin-top:20px;white-space:n
 .bar{background:#1c1c1c;color:#fff;border-radius:26px;margin-top:22px;padding:18px 30px;display:flex;justify-content:space-between;align-items:center;font-size:24px;font-weight:700}
 .bar b{color:#f27a1a}
 .foot{display:flex;justify-content:space-between;color:#8a8a8a;font-size:19px;margin-top:12px}
+/* 🖼️ WP-1055: منتجان ⇒ صفٌّ واحد بطاقاته بطول الشبكة كلها (13/11: نصُّ الصورة فاضي تحت) · ثلاثة ⇒ الأقوى بعرض الصفّ */
+.n2 .card{height:930px} .n2 .pic{height:560px;margin-top:56px} .n2 .pic img{max-height:560px;max-width:440px}
+.n2 .brand{font-size:42px;margin-top:22px} .n2 .name{font-size:25px;white-space:normal;max-height:76px}
+.n2 .price{padding:10px 18px;margin-top:14px} .n2 .now{font-size:54px} .n2 .was{font-size:30px}
+.n3 .card.wide{grid-column:1 / span 2} .n3 .card.wide .pic img{max-width:640px}
 """ % (F400, F700)
 
 
@@ -77,9 +82,14 @@ def img_uri(im):
 def pack_html(it, pics):
     items = it.get("items") or []
     best = max(range(len(items)), key=lambda i: items[i].get("off") or 0) if items else -1
+    n = len(items)
+    if n == 3 and best > 0:   # الأقوى أوّلًا بعرض الصفّ
+        order = [best] + [i for i in range(n) if i != best]
+        items = [items[i] for i in order]; pics = [pics[i] if i < len(pics) else "" for i in order]; best = 0
+    lay = "n2" if n <= 2 else "n3" if n == 3 else "n4"
     cells = []
     for i, p in enumerate(items):
-        hl = " hl" if i == best else ""
+        hl = (" hl" if i == best else "") + (" wide" if lay == "n3" and i == 0 else "")
         tag = '<div class="tag">الأقوى خصم</div>' if i == best else ""
         code = ('<span>🎟️ وبالكود ينزل أكثر</span><b>%s</b>' % E(p.get("code"))) if p.get("code") else '<span></span><i>🛒 الخصم يطلع في السلة</i>'
         cells.append('<div class="card%s">%s<div class="off">-%s%%</div><div class="pic"><img src="%s"></div>'
@@ -89,15 +99,16 @@ def pack_html(it, pics):
                      % (hl, tag, E(p.get("off")), pics[i] if i < len(pics) else "", E(p.get("brand")), E(p.get("title")),
                         E(num(p.get("now"))), E(num(p.get("was"))), code))
     more = int(it.get("more") or 0)
-    bar = ('<span>➕ %d ماركة ثانية بأكوادها <b>في النص</b> ⬇️</span><span>الروابط في النص</span>' % more) if more else '<span>الروابط والأكواد <b>في النص</b> ⬇️</span><span></span>'
+    mtxt = "ماركة ثانية" if more == 1 else "%d ماركات ثانية" % more   # ✍️ WP-1055
+    bar = ('<span>➕ %s بأكوادها <b>في النص</b> ⬇️</span><span>الروابط في النص</span>' % mtxt) if more else '<span>الروابط والأكواد <b>في النص</b> ⬇️</span><span></span>'
     import re
     hl = re.sub(r"(\d+%)", r'<span dir="ltr">\1</span>', E(it.get("hl")))   # «78%» لا «%78» داخل العربي
-    return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>'
+    return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body class="%s">'
             '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول</div><div class="pill">ترينديول · <b>اليوم بس</b></div></div>'
-            '<h1>ماركات معروفة <em>%s</em></h1><div class="sub">%s</div><div class="grid">%s</div>'
+            '<h1>%s <em>%s</em></h1><div class="sub">%s</div><div class="grid">%s</div>'
             '<div class="bar">%s</div>'
             '<div class="foot"><span>الأسعار من ترينديول %s · تتغير بأي لحظة</span><span dir="ltr">@awalbawal_sa</span></div>'
-            '</body></html>') % (CSS, hl, E(it.get("sub")), "".join(cells), bar, E(day_ar(it.get("date"))))
+            '</body></html>') % (CSS, lay, E(it.get("hd") or "ماركات معروفة"), hl, E(it.get("sub")), "".join(cells), bar, E(day_ar(it.get("date"))))
 
 
 def render_pack(it, fetch, scale=2):
