@@ -59,6 +59,23 @@ body{height:1350px;box-sizing:border-box;display:flex;flex-direction:column}
 """
 
 
+# 🖼️ WP-1071: «ماركة اليوم» تملأ الصفحة — الشبكةُ تاخذ كلَّ المساحة بين العنوان والشريط
+#   (واحدة بعرض الصفحة · ثنتان صفّ · ثلاث: الأولى عريضة وثنتان تحتها · أربع 2×2 · خمس وست 3×2)
+#   قِيس 14/11: ثلاثُ بطاقات بطول 410 ⇒ المحتوى ينتهي عند 60% ونصُّ الصفحة تحت فاضي. والبطاقةُ بطولها: الصورةُ تكبر، والاسمُ والسعرُ ثابتان.
+FILL = """
+body{height:1350px;display:flex;flex-direction:column}
+.g3.fill{flex:1;min-height:0;grid-auto-rows:1fr}
+.g3.fill .cat{height:auto;min-height:0}
+.g3.fill .ph{flex:1;height:auto;min-height:0}
+.g3.fill .ph img{max-height:100%;max-width:100%}
+.g3.fill .t,.g3.fill .p{flex:none}
+.g3.fill .p{padding-bottom:16px}
+.g3.fill.n1{grid-template-columns:1fr}
+.g3.fill.n2,.g3.fill.n3,.g3.fill.n4{grid-template-columns:1fr 1fr}
+.g3.fill.n3 .cat:first-child{grid-column:1 / span 2}
+"""
+
+
 def dm(d):
     try:
         y, m, dd = [int(v) for v in str(d).split("-")]
@@ -80,10 +97,10 @@ def lead_html(it, pics):
                      % (off, pics[i] if i < len(pics) else "", E(p.get("type")), E(num(p.get("now")))))
     bar = ('<span>وبكود <b>%s</b> تنزل أكثر</span><span>الروابط في التغريدة</span>' % E(it["code"])) if it.get("code") else '<span>الروابط في التغريدة</span><span></span>'
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + TOP +
-            '<h1>%s <em>من %s ريال</em></h1><div class="chips">%s</div><div class="g3">%s</div><div class="bar">%s</div>'
+            '<h1>%s <em>من %s ريال</em></h1><div class="chips">%s</div><div class="g3 fill n%d">%s</div><div class="bar">%s</div>'
             '<div class="foot"><span>الأسعار من ترينديول %s قبل الكود · تتغير بأي لحظة</span><span dir="ltr">@awalbawal_sa</span></div>'
-            '</body></html>') % (CSS, E(when), E(it.get("brand")), E(num(it.get("from"))),
-                                 '<div class="plus">+</div>'.join(chips), "".join(cells), bar, E(day_ar(it.get("date"))))
+            '</body></html>') % (CSS + FILL, E(when), E(it.get("brand")), E(num(it.get("from"))),
+                                 '<div class="plus">+</div>'.join(chips), min(len(cells), 6), "".join(cells), bar, E(day_ar(it.get("date"))))
 
 
 def rest_html(it, pics=None):
@@ -109,7 +126,7 @@ def rest_html(it, pics=None):
             '</body></html>') % (CSS + BIG, "اليوم بس", HEAD(it.get("head")), E(sub), (" big" if len(rows) <= 4 else "") + (" haspic" if pics else ""), "".join(rows), E(day_ar(it.get("date"))))
 
 
-def _shoot(html_txt, name, scale=2):
+def _shoot(html_txt, name, scale=2, fill=False):
     from playwright.sync_api import sync_playwright
     from PIL import Image
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
@@ -125,7 +142,9 @@ def _shoot(html_txt, name, scale=2):
           foot: document.querySelector('.foot').getBoundingClientRect().bottom,
           wide: (() => { const h = document.querySelector('h1'); return h.scrollWidth > h.clientWidth + 2; })(),
           broken: [...document.images].filter(i => !i.complete || !i.naturalWidth).length,
-          cut: [...document.querySelectorAll('.cat')].filter(c => { const p = c.querySelector('.p'); return p && p.getBoundingClientRect().bottom > c.getBoundingClientRect().bottom + 1; }).length })""")
+          cut: [...document.querySelectorAll('.cat')].filter(c => { const p = c.querySelector('.p'); return p && p.getBoundingClientRect().bottom > c.getBoundingClientRect().bottom + 1; }).length,
+          gap: (() => { const els = [...document.body.children].filter(e => e.getBoundingClientRect().height > 0);
+                        return Math.max(0, ...els.map((e, i) => (i + 1 < els.length ? els[i + 1].getBoundingClientRect().top : document.body.getBoundingClientRect().bottom) - e.getBoundingClientRect().bottom)); })() })""")
         png = pg.screenshot(clip={"x": 0, "y": 0, "width": W, "height": H})
         b.close()
     why = None
@@ -133,6 +152,7 @@ def _shoot(html_txt, name, scale=2):
     elif chk["wide"]: why = "العنوانُ أعرض من الصفحة"
     elif chk["broken"]: why = "%d صورة ما انرسمت" % chk["broken"]
     elif chk.get("cut"): why = "%d سعر مقصوص في خانته" % chk["cut"]   # 🖼️ WP-1063: لا رفع لصورةٍ سعرُها مقصوص
+    elif fill and chk.get("gap", 0) > H * 0.25: why = "فراغٌ %d بكسل في الصفحة (أكثر من ربعها)" % chk["gap"]   # 🖼️ WP-1071: لا رفع لصورةٍ نصُّها فاضي
     im = Image.open(io.BytesIO(png)).convert("RGB")
     if im.size != (W * scale, H * scale): why = why or "المقاس %dx%d لا %dx%d" % (im.size[0], im.size[1], W * scale, H * scale)
     for q in (86, 80, 72, 64):
@@ -147,7 +167,7 @@ def render_lead(it, fetch, scale=2):
     pics = [img_uri(fetch(p.get("img"))) for p in items]
     if any(not u for u in pics):
         return None, "صورةُ قسمٍ ما نزلت (%d من %d)" % (sum(1 for u in pics if not u), len(pics))
-    return _shoot(lead_html(it, pics), "_tclead.html", scale)
+    return _shoot(lead_html(it, pics), "_tclead.html", scale, fill=True)
 
 
 def render_rest(it, scale=2, fetch=None):
