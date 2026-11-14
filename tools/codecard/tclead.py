@@ -49,6 +49,10 @@ body{height:1350px;box-sizing:border-box;display:flex;flex-direction:column}
 .list.big{flex:1;justify-content:center;gap:30px}
 .list.big .row{height:210px;padding:0 36px;gap:30px}
 .list.big .ic{width:104px;height:104px;font-size:48px}
+.ic.pic{background:#fff;border-radius:20px;overflow:hidden;width:96px;height:96px}
+.ic.pic img{width:100%;height:100%;object-fit:contain}
+.list.big .ic.pic{width:170px;height:170px;border-radius:24px}
+.list.big.haspic .ic{width:170px;height:170px;font-size:64px}   /* الحرفُ بمقاس الصورة ⇒ الأسماءُ على خطٍّ واحد */
 .list.big .nm .a{font-size:48px}
 .list.big .nm .b{font-size:32px;margin-top:6px}
 .list.big .cd{font-size:36px;padding:10px 26px}
@@ -82,9 +86,9 @@ def lead_html(it, pics):
                                  '<div class="plus">+</div>'.join(chips), "".join(cells), bar, E(day_ar(it.get("date"))))
 
 
-def rest_html(it):
+def rest_html(it, pics=None):
     rows = []
-    for r in it.get("rows") or []:
+    for i, r in enumerate(it.get("rows") or []):
         if r.get("upto") and r.get("extra"): b = "خصم يوصل <em>%d%%</em> + %d%% بالكود" % (int(r["upto"]), int(r["extra"]))
         elif r.get("extra"): b = "%d%% زيادة بالكود" % int(r["extra"])
         elif r.get("upto"): b = "خصم يوصل <em>%d%%</em>" % int(r["upto"])
@@ -93,14 +97,16 @@ def rest_html(it):
         cd = ('<div class="cd%s">%s</div>' % (" hot" if r.get("hot") else "", E(r["code"]))) if r.get("code") else '<div class="cd no">الخصم في السلة</div>'
         name = str(r.get("name") or "")
         first = (re.sub(r"[^\w؀-ۿ]", "", name)[:1] or "•").upper()
-        rows.append('<div class="row"><div class="ic">%s</div><div class="nm"><div class="a">%s</div><div class="b">%s</div></div>%s</div>'
-                    % (E(first), E(name), PCT(b), cd))
+        pic = (pics or {}).get(i) if pics else None   # 🖼️ WP-1064: صورةُ أقوى منتجٍ في الحملة بدل الحرف (بلاها الحرف)
+        ic = ('<div class="ic pic"><img src="%s"></div>' % pic) if pic else ('<div class="ic">%s</div>' % E(first))
+        rows.append('<div class="row">%s<div class="nm"><div class="a">%s</div><div class="b">%s</div></div>%s</div>'
+                    % (ic, E(name), PCT(b), cd))
     more = int(it.get("more") or 0)
     sub = (it.get("sub") or "كل ماركة بكودها · والروابط في نص الرد") + (" · و%d غيرها في النص" % more if more else "")   # 🖼️ WP-1063: منشورٌ لحاله ⇒ «الروابط في التغريدة»
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + TOP +
             '<h1>%s</h1><div class="sub">%s</div><div class="list%s">%s</div>'
             '<div class="foot"><span>من ترينديول %s · العروض تتغير بأي لحظة</span><span dir="ltr">@awalbawal_sa</span></div>'
-            '</body></html>') % (CSS + BIG, "اليوم بس", HEAD(it.get("head")), E(sub), " big" if len(rows) <= 4 else "", "".join(rows), E(day_ar(it.get("date"))))
+            '</body></html>') % (CSS + BIG, "اليوم بس", HEAD(it.get("head")), E(sub), (" big" if len(rows) <= 4 else "") + (" haspic" if pics else ""), "".join(rows), E(day_ar(it.get("date"))))
 
 
 def _shoot(html_txt, name, scale=2):
@@ -144,5 +150,15 @@ def render_lead(it, fetch, scale=2):
     return _shoot(lead_html(it, pics), "_tclead.html", scale)
 
 
-def render_rest(it, scale=2):
-    return _shoot(rest_html(it), "_tcrest.html", scale)
+def render_rest(it, scale=2, fetch=None):
+    """🖼️ WP-1064: `fetch` ⇒ صورةُ كلِّ سطرٍ (img) — ما نزلت ⇒ حرفُه كما كان (لا تمنع الرفع)."""
+    pics = {}
+    if fetch:
+        for i, r in enumerate(it.get("rows") or []):
+            if r.get("img"):
+                try:
+                    u = img_uri(fetch(r["img"]))
+                    if u: pics[i] = u
+                except Exception:
+                    pass
+    return _shoot(rest_html(it, pics), "_tcrest.html", scale)

@@ -56,7 +56,7 @@ def td_cards(items):
         cid = it.get("cid")
         if it.get("fresh"): say(f"🖼️ {cid}: مرسومةٌ ببصمة نصّها"); continue
         try:
-            jpg, why = render_lead(it, fetch_img) if it.get("kind") == "lead" else render_rest(it)
+            jpg, why = render_lead(it, fetch_img) if it.get("kind") == "lead" else render_rest(it, fetch=fetch_img)   # 🖼️ WP-1064: صورُ القائمة
         except Exception as e:
             say(f"   ❌ 🖼️ {cid}:", repr(e)[:200]); ok = False; continue
         tag = (it.get("brand") or "") + f" · {len(it.get('items') or it.get('rows') or [])}"
