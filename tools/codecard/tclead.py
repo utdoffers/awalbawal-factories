@@ -16,7 +16,7 @@ EXTRA = """
 .cat{background:#fff;border-radius:26px;overflow:hidden;position:relative;height:410px;display:flex;flex-direction:column}
 .cat .ph{height:292px;display:flex;align-items:center;justify-content:center;background:#fff}
 .cat .ph img{max-height:292px;max-width:100%;object-fit:contain}
-.cat .t{padding:8px 18px 0;font-size:28px;font-weight:700}
+.cat .t{padding:8px 18px 0;font-size:28px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* 🖼️ WP-1063: سطرٌ واحد — الاسمُ بسطرين كان يقصّ السعر (فحص كاراكا 12/11) */
 .cat .p{padding:0 18px;font-size:22px;color:#666}
 .cat .p b{font-size:40px;color:#1f9a3c;margin:0 4px}
 .cat .o{position:absolute;top:14px;right:14px;background:#e0302e;color:#fff;font-weight:700;font-size:22px;border-radius:30px;padding:4px 14px;direction:ltr}
@@ -35,6 +35,24 @@ EXTRA = """
 CSS = _BASE + EXTRA
 PCT = lambda s: re.sub(r"(\d+(?:\.\d+)?%)", r'<span class="n">\1</span>', s)
 TOP = '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول</div><div class="pill">ترينديول · <b>%s</b></div></div>'
+
+
+# 🖼️ WP-1063: عنوانُ قائمة العروض — «عروض ترينديول <em>اليوم بس</em>» من الخادم (وسمُ <em> وحده مسموح) · وبلاه العنوانُ القديم لردّ الثريد
+def HEAD(h):
+    if not h: return "وعروض ثانية <em>اليوم بس</em>"
+    return E(str(h)).replace("&lt;em&gt;", "<em>").replace("&lt;/em&gt;", "</em>")
+
+
+# 🖼️ WP-1063: قائمةٌ قصيرة (≤٤) تملأ الصفحة بصفوفٍ أكبر بدل فراغ نصّ الصفحة (3 عروض 14/11 كانت تنتهي عند الثلث)
+BIG = """
+body{height:1350px;box-sizing:border-box;display:flex;flex-direction:column}
+.list.big{flex:1;justify-content:center;gap:30px}
+.list.big .row{height:210px;padding:0 36px;gap:30px}
+.list.big .ic{width:104px;height:104px;font-size:48px}
+.list.big .nm .a{font-size:48px}
+.list.big .nm .b{font-size:32px;margin-top:6px}
+.list.big .cd{font-size:36px;padding:10px 26px}
+"""
 
 
 def dm(d):
@@ -78,11 +96,11 @@ def rest_html(it):
         rows.append('<div class="row"><div class="ic">%s</div><div class="nm"><div class="a">%s</div><div class="b">%s</div></div>%s</div>'
                     % (E(first), E(name), PCT(b), cd))
     more = int(it.get("more") or 0)
-    sub = "كل ماركة بكودها · والروابط في نص الرد" + (" · و%d غيرها في النص" % more if more else "")
+    sub = (it.get("sub") or "كل ماركة بكودها · والروابط في نص الرد") + (" · و%d غيرها في النص" % more if more else "")   # 🖼️ WP-1063: منشورٌ لحاله ⇒ «الروابط في التغريدة»
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + TOP +
-            '<h1>وعروض ثانية <em>اليوم بس</em></h1><div class="sub">%s</div><div class="list">%s</div>'
+            '<h1>%s</h1><div class="sub">%s</div><div class="list%s">%s</div>'
             '<div class="foot"><span>من ترينديول %s · العروض تتغير بأي لحظة</span><span dir="ltr">@awalbawal_sa</span></div>'
-            '</body></html>') % (CSS, "اليوم بس", E(sub), "".join(rows), E(day_ar(it.get("date"))))
+            '</body></html>') % (CSS + BIG, "اليوم بس", HEAD(it.get("head")), E(sub), " big" if len(rows) <= 4 else "", "".join(rows), E(day_ar(it.get("date"))))
 
 
 def _shoot(html_txt, name, scale=2):
@@ -100,13 +118,15 @@ def _shoot(html_txt, name, scale=2):
         chk = pg.evaluate("""() => ({
           foot: document.querySelector('.foot').getBoundingClientRect().bottom,
           wide: (() => { const h = document.querySelector('h1'); return h.scrollWidth > h.clientWidth + 2; })(),
-          broken: [...document.images].filter(i => !i.complete || !i.naturalWidth).length })""")
+          broken: [...document.images].filter(i => !i.complete || !i.naturalWidth).length,
+          cut: [...document.querySelectorAll('.cat')].filter(c => { const p = c.querySelector('.p'); return p && p.getBoundingClientRect().bottom > c.getBoundingClientRect().bottom + 1; }).length })""")
         png = pg.screenshot(clip={"x": 0, "y": 0, "width": W, "height": H})
         b.close()
     why = None
     if chk["foot"] > H: why = "الصفحةُ أطول من 1350 (%d)" % chk["foot"]
     elif chk["wide"]: why = "العنوانُ أعرض من الصفحة"
     elif chk["broken"]: why = "%d صورة ما انرسمت" % chk["broken"]
+    elif chk.get("cut"): why = "%d سعر مقصوص في خانته" % chk["cut"]   # 🖼️ WP-1063: لا رفع لصورةٍ سعرُها مقصوص
     im = Image.open(io.BytesIO(png)).convert("RGB")
     if im.size != (W * scale, H * scale): why = why or "المقاس %dx%d لا %dx%d" % (im.size[0], im.size[1], W * scale, H * scale)
     for q in (86, 80, 72, 64):
