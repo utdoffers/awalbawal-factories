@@ -258,6 +258,41 @@ def yt_code_slot(a, slot, code, day, rnd):
     say(f"   ✅ رُفع: https://www.youtube.com/shorts/{vid} ({ust}) ← {cl.get('publish_at') or 'الآن'}")
     return 1
 
+def yt_xvid_slot(a, slot, item, code, day, rnd):
+    """▶️ WP-1084 (قوله «٢»): خانةُ «مقطع المنتج» من طابور إكس — فيديو البائع، بشكل مقطع المنتج نفسه
+    (جملتان فوق · «في نون اكتب» · كودُ نون) وصوتُه يُستبدل بالموسيقى المولّدة. يُرجع 1 إن رُفع، 0 إن تعذّر (فيكمل علي إكسبريس)."""
+    say(f"▶️ خانة يوتيوب {slot['day']} {slot['hm']} ← مقطعُ إكس «{item.get('l1')} {item.get('l2')}» · نون: {item.get('search')}")
+    tmp = tempfile.mkdtemp(prefix="ytx")
+    src = os.path.join(tmp, "src.mp4")
+    if not download(item["video"], src): say("   ⚠️ ما نزل فيديو إكس"); return 0
+    p = probe(src)
+    if not p or p[2] < 6: say("   ⚠️ فيديو إكس قصيرٌ أو تالف"); return 0
+    png, wav, out = os.path.join(tmp, "ov.png"), os.path.join(tmp, "m.wav"), os.path.join(tmp, "out.mp4")
+    overlay(png, item["l1"], item["l2"], item["search"], code, y0=YT_BAND_Y)
+    subprocess.run([sys.executable, os.path.join(HERE, "music.py"), "8.75", str(rnd.randint(1, 10**6)), wav], check=True, capture_output=True)
+    path, err = render_yt(src, png, wav, out, *p)
+    if not path: say("   ⚠️ تعثّر الرسم:", err); return 0
+    key = f"YS-{day}-x-{str(item['id'])[-10:]}"
+    if a.dry:
+        dd = os.environ.get("YT_DRY_OUT") or tempfile.gettempdir(); os.makedirs(dd, exist_ok=True)
+        shutil.copy(path, os.path.join(dd, key + ".mp4"))
+        say(f"   🧪 جافّ: {key} · {os.path.getsize(path)//1000}KB · {p[0]}x{p[1]} {p[2]:.0f}ث"); return 1
+    # النصُّ وكلمةُ البحث يعيدهما الخادمُ من الطابور (src_id) — لا يكتبهما المصنع
+    cl = api_post("/api/yt/claim", {"key": key, "type": "product", "src_id": "x:" + str(item["id"]), "at": slot["at"]})
+    if not cl.get("ok"):
+        say("   ⚠️ الخادم ما حجز:", cl.get("why") or cl)
+        if cl.get("stop"): raise YtStop(cl.get("why"))
+        return 0
+    try:
+        vid, ust = yt_upload(path, cl)
+    except Exception as e:
+        d = api_post("/api/yt/done", {"key": key, "why": str(e)[:280]}); say("   ⛔ تعذّر الرفع ليوتيوب:", e)
+        if (d or {}).get("stop"): raise YtStop("يوتيوب أوقف الرفع لحدّه — الباقي ينتظر مقعدًا")
+        return 0
+    api_post("/api/yt/done", {"key": key, "video_id": vid})
+    say(f"   ✅ رُفع (من إكس): https://www.youtube.com/shorts/{vid} ({ust}) ← {cl.get('publish_at') or 'الآن'}")
+    return 1
+
 class YtStop(Exception):
     """⏳ WP-981: الخادمُ أو يوتيوب قال «لا مقعد» — تقف الدفعةُ كلُّها بلا رسمٍ ولا رفعٍ ضائع."""
 
@@ -291,14 +326,19 @@ def main_youtube(a):
     day = datetime.datetime.utcnow().strftime("%Y%m%d")
     rnd = random.Random("yt" + day)
     rnd.shuffle(pool)
-    if pool and n_prod: prequeue(pool[: min(len(pool), 2 * n_prod + 2)])
+    n_ae = max(0, n_prod - len(st.get("xvids") or []))   # ▶️ WP-1084: خاناتٌ يملؤها طابورُ إكس لا تُصطاد لها علي إكسبريس مسبقًا
+    if pool and n_ae: prequeue(pool[: min(len(pool), 2 * n_ae + 2)])
     made = 0
+    xq = list(st.get("xvids") or [])   # ▶️ WP-1084: مقاطعُ إكس أوّلًا في خانات المنتج (الأقدمُ أوّلًا)
+    if xq: say(f"🐦 مقاطعُ إكس في الطابور: {len(xq)}")
     try:
         for slot in free[: a.max]:
             if is_code(slot):
                 made += yt_code_slot(a, slot, code, day, rnd); continue
             if slot.get("why"): say("   ", slot["why"])
             done = False
+            while xq and not done:
+                if yt_xvid_slot(a, slot, xq.pop(0), code, day, rnd): made += 1; done = True
             while pool and not done:
                 k = pool.pop(0)
                 say(f"▶️ خانة يوتيوب {slot['day']} {slot['hm']} ← النوع «{k['kind']}»")
