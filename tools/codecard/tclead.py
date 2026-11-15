@@ -40,7 +40,8 @@ TOP = '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول
 # 🖼️ WP-1063: عنوانُ قائمة العروض — «عروض ترينديول <em>اليوم بس</em>» من الخادم (وسمُ <em> وحده مسموح) · وبلاه العنوانُ القديم لردّ الثريد
 def HEAD(h):
     if not h: return "وعروض ثانية <em>اليوم بس</em>"
-    return E(str(h)).replace("&lt;em&gt;", "<em>").replace("&lt;/em&gt;", "</em>")
+    # 🖼️ WP-1089: «70%» معزولة الاتجاه في العنوان أيضًا (العنوانُ صار فيه نسبة — كانت تنقلب «%70»)
+    return PCT(E(str(h)).replace("&lt;em&gt;", "<em>").replace("&lt;/em&gt;", "</em>"))
 
 
 # 🖼️ WP-1063: قائمةٌ قصيرة (≤٤) تملأ الصفحة بصفوفٍ أكبر بدل فراغ نصّ الصفحة (3 عروض 14/11 كانت تنتهي عند الثلث)
@@ -117,6 +118,7 @@ def lead_html(it, pics):
 
 
 def rest_html(it, pics=None):
+    # 🖼️ WP-1089: الشارةُ فوق من الخادم (it["when"]: «اليوم بس» أو تاريخُ اليوم) — كانت «اليوم بس» ثابتة على كلِّ قائمة
     rows = []
     for i, r in enumerate(it.get("rows") or []):
         if r.get("upto") and r.get("extra"): b = "خصم يوصل <em>%d%%</em> + %d%% بالكود" % (int(r["upto"]), int(r["extra"]))
@@ -136,7 +138,7 @@ def rest_html(it, pics=None):
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + TOP +
             '<h1>%s</h1><div class="sub">%s</div><div class="list%s">%s</div>'
             '<div class="foot"><span>من ترينديول %s · العروض تتغير بأي لحظة</span><span dir="ltr">@awalbawal_sa</span></div>'
-            '</body></html>') % (CSS + BIG, "اليوم بس", HEAD(it.get("head")), E(sub), (" big n%d" % len(rows) if len(rows) <= 4 else "") + (" haspic" if pics else ""), "".join(rows), E(day_ar(it.get("date"))))
+            '</body></html>') % (CSS + BIG, E(it.get("when") or "اليوم بس"), HEAD(it.get("head")), E(sub), (" big n%d" % len(rows) if len(rows) <= 4 else "") + (" haspic" if pics else ""), "".join(rows), E(day_ar(it.get("date"))))
 
 
 def _shoot(html_txt, name, scale=2, fill=False):
