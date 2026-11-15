@@ -76,7 +76,34 @@ h1 .g{color:#e5372b}
 body{--acc:#b0201a}
 .tip{background:#fde6e2;border-color:#f3c4bd}
 """
-LAYOUT_CSS = {"ag1": CSS_AG, "ae1": CSS_AE}
+# 🍫 WP-1092: قالبُ «حلويات اليوم» (sw1) — شكلُ تغريدته اليدويّة 15/11 («٤ اوكي»): ثلاثةُ أعمدة في صفحةٍ واحدة 4:5 (حتى 11 منتج)
+#   + مربّعٌ أسود «خصم يوصل X% · واللوح من Y ريال» يأخذ ما بقي من الصفّ الأخير · نسبةُ الخصم شارةٌ في زاوية البطاقة.
+CSS_SW = CSS + """
+body{background:#f7f2ec}
+.logo b{color:#8a4b22}
+.pill{background:#4a2814} .pill span{color:#f6c98e}
+h1{font-size:70px} h1 .g{color:#b5541c}
+.card{border-color:#eadfd3}
+.sub{color:#8a4b22;font-weight:700}
+body{--acc:#2f8f4e}
+"""
+LAYOUT_CSS = {"ag1": CSS_AG, "ae1": CSS_AE, "sw1": CSS_SW}
+# يُلحق **بعد** CSS_CELL (فيعلو على قواعد t1/t2 العامّة) — خطوطُ البطاقة الصغيرة بثلاثة أعمدة ودرجاتُ تضييقها
+LAYOUT_TAIL = {"sw1": """
+.g3{grid-template-columns:1fr 1fr 1fr}
+.grid{gap:14px}
+.card{padding:10px 12px 10px;border-radius:18px;gap:4px}
+body .nm{font-size:20px;line-height:1.42} body .sub{font-size:15px;margin:1px 0 2px}
+body .now{font-size:29px} body .cur{font-size:14px} body .was{font-size:16px} body .bd{font-size:14px} body .pr{gap:5px;margin-top:2px}
+body .pr .off{display:none}
+.ctg{left:10px;right:auto;top:10px;background:#d62f2f;color:#fff;font-size:17px;padding:2px 10px;direction:ltr}
+body.t1 .nm{font-size:18px} body.t1 .sub{font-size:14px} body.t1 .now{font-size:26px} body.t1 .was{font-size:15px} body.t1 .bd,body.t1 .cur{font-size:13px}
+body.t2 .nm{font-size:17px} body.t2 .sub{font-size:13px} body.t2 .now{font-size:24px} body.t2 .was{font-size:14px} body.t2 .bd,body.t2 .cur{font-size:12px} body.t2 .card{padding:8px 10px}
+.card.promo{background:#1c1c1c;border-color:#1c1c1c;color:#fff;justify-content:center;align-items:center;text-align:center;gap:6px;padding:14px}
+.promo .pb{font-size:36px;font-weight:700;line-height:1.25} .promo .pb span{color:#f2b628}
+.promo .pl{font-size:30px;font-weight:700;line-height:1.3} .promo .pl b{color:#f2b628}
+.promo .pt{font-size:17px;color:#bdbdbd;margin-top:4px}
+"""}
 
 # 📺 ═══ WP-991 — قالبُ «دليل الشراء» (gd1) ═══
 #   بعد قوله 2026-11-08 «الصور معجبتك كذا ؟»: في ae1 كانت صورةُ المنتج بنرَ المتجر (شعار وكود وNEW) مصغّرةً لسدس الكرت،
@@ -261,7 +288,15 @@ body.t2 .now{font-size:27px} body.t2 .cur{font-size:15px} body.t2 .card{gap:4px;
 def page_html(it, pg):
     items = pg.get("items") or []
     k = len(items)
-    if k <= 3 and pg.get("of", 1) > 1:
+    if it.get("layout") == "sw1":
+        # 🍫 WP-1092: ثلاثةُ أعمدة + المربّعُ يأخذ ما بقي من الصفّ الأخير (11 ⇒ خانة · 10 ⇒ خانتين · 9 ⇒ صفٌّ كامل)
+        pr = it.get("promo") or {}
+        span = 3 - (k % 3)
+        promo = ('<div class="card promo" style="grid-column:span %d"><div class="pb">خصم يوصل <span dir="ltr">%s%%</span></div>%s<div class="pt">%s</div></div>'
+                 % (span, E(pr.get("pct") or it.get("pct")), ('<div class="pl">%s</div>' % E(pr.get("line"))) if pr.get("line") else "", E(pr.get("tip") or "🔗 الروابط في التغريدة")))
+        rows = (k + span) // 3
+        grid = '<div class="grid g3" style="grid-template-rows:repeat(%d,1fr)">%s%s</div>' % (max(rows, 1), "".join(cell(p) for p in items), promo)
+    elif k <= 3 and pg.get("of", 1) > 1:
         grid = '<div class="grid rows" style="grid-template-rows:repeat(%d,1fr)">%s</div>' % (max(k, 1), "".join(cell(p) for p in items))
         grid += '<div class="tip">%s</div>' % E(it.get("tip") or "💡 الروابط في التغريدة · الأسعار من أمازون السعودية نفسها")
     else:
@@ -281,7 +316,7 @@ def page_html(it, pg):
             '%s'
             '<div class="subt">%s</div>%s'
             '<div class="foot"><div>الأسعار%s %s %s · تتغير بأي لحظة</div><div dir="ltr">@awalbawal_sa</div></div>'
-            '</body></html>') % (LAYOUT_CSS.get(it.get("layout"), CSS) + CSS_CELL, E(it.get("store") or "أمازون"), E(it.get("pill")), h1, E(sub), grid,
+            '</body></html>') % (LAYOUT_CSS.get(it.get("layout"), CSS) + CSS_CELL + LAYOUT_TAIL.get(it.get("layout"), ""), E(it.get("store") or "أمازون"), E(it.get("pill")), h1, E(sub), grid,
                                  " والمقاسات" if it.get("sized") else "", E(it.get("foot") or "من أمازون"), E(it.get("date")))
 
 
