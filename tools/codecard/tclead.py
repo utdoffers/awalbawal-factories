@@ -153,12 +153,17 @@ def _shoot(html_txt, name, scale=2, fill=False):
           while (h.scrollWidth > h.clientWidth + 2 && f > 52) { f -= 2; h.style.fontSize = f + 'px'; }
           /* 🧩 WP-1080: اسمُ السطر يصغر لين يدخل كاملًا (15/11: «s Perfumes» و«trongville» — القصُّ بنقاطٍ في سطرٍ عربيٍّ فيه لاتيني يقصّ من أوّل الكلمة) */
           for (const a of document.querySelectorAll('.nm .a')) { let g = parseFloat(getComputedStyle(a).fontSize);
-            while (a.scrollWidth > a.clientWidth + 2 && g > 26) { g -= 2; a.style.fontSize = g + 'px'; } } }""")
+            while (a.scrollWidth > a.clientWidth + 2 && g > 26) { g -= 2; a.style.fontSize = g + 'px'; } }
+          /* 🧱 WP-1087: واسمُ المنتج في «ماركة اليوم» كذلك — كان يُقصّ بنقاطٍ من أوّل الكلمة اللاتينيّة («...den Rose»)
+             يصغر لين 22 ثمّ ينزل سطرين (الصورةُ تصغر لا السعر) */
+          for (const t of document.querySelectorAll('.cat .t')) { let g = parseFloat(getComputedStyle(t).fontSize);
+            while (t.scrollWidth > t.clientWidth + 2 && g > 22) { g -= 1; t.style.fontSize = g + 'px'; }
+            if (t.scrollWidth > t.clientWidth + 2) { t.style.whiteSpace = 'normal'; t.style.lineHeight = '1.25'; } } }""")
         chk = pg.evaluate("""() => ({
           foot: document.querySelector('.foot').getBoundingClientRect().bottom,
           wide: (() => { const h = document.querySelector('h1'); return h.scrollWidth > h.clientWidth + 2; })(),
           broken: [...document.images].filter(i => !i.complete || !i.naturalWidth).length,
-          name: [...document.querySelectorAll('.nm .a')].filter(a => a.scrollWidth > a.clientWidth + 2).length,
+          name: [...document.querySelectorAll('.nm .a'), ...document.querySelectorAll('.cat .t')].filter(a => a.scrollWidth > a.clientWidth + 2 || a.scrollHeight > a.clientHeight + 4).length,   // 🧱 WP-1087: وأسماءُ «ماركة اليوم»
           cut: [...document.querySelectorAll('.cat')].filter(c => { const p = c.querySelector('.p'); return p && p.getBoundingClientRect().bottom > c.getBoundingClientRect().bottom + 1; }).length,
           gap: (() => { const els = [...document.body.children].filter(e => e.getBoundingClientRect().height > 0);
                         return Math.max(0, ...els.map((e, i) => (i + 1 < els.length ? els[i + 1].getBoundingClientRect().top : document.body.getBoundingClientRect().bottom) - e.getBoundingClientRect().bottom)); })() })""")
