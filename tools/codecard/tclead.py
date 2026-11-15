@@ -56,6 +56,19 @@ body{height:1350px;box-sizing:border-box;display:flex;flex-direction:column}
 .list.big .nm .a{font-size:48px}
 .list.big .nm .b{font-size:32px;margin-top:6px}
 .list.big .cd{font-size:36px;padding:10px 26px}
+/* 🧩 WP-1080: الصفوفُ تملأ الصفحة بعددها (15/11: سطران بطول 210 وثلثا الصفحة فاضي) — كلُّ صفٍّ يكبر لين حدّه ولا يطلع برّا */
+.list.big .row{height:auto;flex:1 1 0;min-height:150px;max-height:400px}
+.list.big.n1 .row{max-height:640px}
+.list.big.n1 .row,.list.big.n2 .row{display:grid;grid-template-columns:300px 1fr;grid-template-rows:auto auto;column-gap:40px;row-gap:18px;align-content:center}
+.list.big.n1 .ic,.list.big.n2 .ic{grid-row:1 / span 2;width:300px;height:300px;font-size:110px}
+.list.big.n1 .ic.pic,.list.big.n2 .ic.pic{width:300px;height:300px}
+.list.big.n1 .nm,.list.big.n2 .nm{grid-column:2;align-self:end}
+.list.big.n1 .cd,.list.big.n2 .cd{grid-column:2;justify-self:start;align-self:start}
+.list.big.n1 .nm .a,.list.big.n2 .nm .a{font-size:56px}
+.list.big.n1 .row{grid-template-columns:440px 1fr}
+.list.big.n1 .ic,.list.big.n1 .ic.pic{width:440px;height:440px;font-size:150px}
+.list.big.n1 .nm .a{font-size:64px}
+.list.big.n1 .nm .b{font-size:38px}
 """
 
 
@@ -123,7 +136,7 @@ def rest_html(it, pics=None):
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + TOP +
             '<h1>%s</h1><div class="sub">%s</div><div class="list%s">%s</div>'
             '<div class="foot"><span>من ترينديول %s · العروض تتغير بأي لحظة</span><span dir="ltr">@awalbawal_sa</span></div>'
-            '</body></html>') % (CSS + BIG, "اليوم بس", HEAD(it.get("head")), E(sub), (" big" if len(rows) <= 4 else "") + (" haspic" if pics else ""), "".join(rows), E(day_ar(it.get("date"))))
+            '</body></html>') % (CSS + BIG, "اليوم بس", HEAD(it.get("head")), E(sub), (" big n%d" % len(rows) if len(rows) <= 4 else "") + (" haspic" if pics else ""), "".join(rows), E(day_ar(it.get("date"))))
 
 
 def _shoot(html_txt, name, scale=2, fill=False):
@@ -137,11 +150,15 @@ def _shoot(html_txt, name, scale=2, fill=False):
         pg.goto("file://" + path, wait_until="networkidle", timeout=60000)
         pg.wait_for_timeout(800)
         pg.evaluate("""() => { const h = document.querySelector('h1'); let f = 76;
-          while (h.scrollWidth > h.clientWidth + 2 && f > 52) { f -= 2; h.style.fontSize = f + 'px'; } }""")
+          while (h.scrollWidth > h.clientWidth + 2 && f > 52) { f -= 2; h.style.fontSize = f + 'px'; }
+          /* 🧩 WP-1080: اسمُ السطر يصغر لين يدخل كاملًا (15/11: «s Perfumes» و«trongville» — القصُّ بنقاطٍ في سطرٍ عربيٍّ فيه لاتيني يقصّ من أوّل الكلمة) */
+          for (const a of document.querySelectorAll('.nm .a')) { let g = parseFloat(getComputedStyle(a).fontSize);
+            while (a.scrollWidth > a.clientWidth + 2 && g > 26) { g -= 2; a.style.fontSize = g + 'px'; } } }""")
         chk = pg.evaluate("""() => ({
           foot: document.querySelector('.foot').getBoundingClientRect().bottom,
           wide: (() => { const h = document.querySelector('h1'); return h.scrollWidth > h.clientWidth + 2; })(),
           broken: [...document.images].filter(i => !i.complete || !i.naturalWidth).length,
+          name: [...document.querySelectorAll('.nm .a')].filter(a => a.scrollWidth > a.clientWidth + 2).length,
           cut: [...document.querySelectorAll('.cat')].filter(c => { const p = c.querySelector('.p'); return p && p.getBoundingClientRect().bottom > c.getBoundingClientRect().bottom + 1; }).length,
           gap: (() => { const els = [...document.body.children].filter(e => e.getBoundingClientRect().height > 0);
                         return Math.max(0, ...els.map((e, i) => (i + 1 < els.length ? els[i + 1].getBoundingClientRect().top : document.body.getBoundingClientRect().bottom) - e.getBoundingClientRect().bottom)); })() })""")
@@ -151,6 +168,7 @@ def _shoot(html_txt, name, scale=2, fill=False):
     if chk["foot"] > H: why = "الصفحةُ أطول من 1350 (%d)" % chk["foot"]
     elif chk["wide"]: why = "العنوانُ أعرض من الصفحة"
     elif chk["broken"]: why = "%d صورة ما انرسمت" % chk["broken"]
+    elif chk.get("name"): why = "%d اسم مقصوص في سطره" % chk["name"]   # 🧩 WP-1080: لا رفع لاسمٍ مقصوص (الخادمُ يرسل ≤ 22 حرفًا والخطُّ يصغر قبلها)
     elif chk.get("cut"): why = "%d سعر مقصوص في خانته" % chk["cut"]   # 🖼️ WP-1063: لا رفع لصورةٍ سعرُها مقصوص
     elif fill and chk.get("gap", 0) > H * 0.25: why = "فراغٌ %d بكسل في الصفحة (أكثر من ربعها)" % chk["gap"]   # 🖼️ WP-1071: لا رفع لصورةٍ نصُّها فاضي
     im = Image.open(io.BytesIO(png)).convert("RGB")
