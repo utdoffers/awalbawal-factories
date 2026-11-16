@@ -4,7 +4,7 @@
 # تحتها اسمُ المتجر والعرض، ثمّ شريطُ الكود الفحمي. وثلاثةُ أشكالٍ بحسب ما في يدنا:
 #   poster ⇐ صورةُ إعلان المتجر (og:image) · logo ⇐ الشعارُ وحدَه · name ⇐ لا صورة: الاسمُ كبيرًا.
 # ⚖️ الكودُ والقيمةُ يُكتبان من البيانات حرفًا. العربيُّ بـraqm (تشكيلٌ ووصلٌ واتجاه) — وكلُّ سطرٍ باتجاهٍ واحد.
-import io, os
+import io, os, re   # re: WP-1108 (عزلُ النسبة آخرَ السطر)
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, features
 assert features.check("raqm"), "لا raqm ⇒ لن يتشكّل العربي"
 
@@ -17,6 +17,11 @@ S = 1080
 AR = "٠١٢٣٤٥٦٧٨٩"
 
 def ar_digits(t): return "".join(AR[int(c)] if c.isdigit() else c for c in str(t))
+def en_digits(t):
+    """WP-1108: أرقامٌ إنجليزيّة + عزلُ «20%» إذا جاء آخرَ السطر — قِيس بالرسم: بلا عزلٍ يطلع «%20 خصم» (مقلوب)،
+    وفي وسط السطر يطلع صحيحًا بلا عزل (والعزلُ هناك يقلبه) ⇒ العزلُ لآخر السطر وحدَه."""
+    t = "".join(str(AR.index(c)) if c in AR else c for c in str(t))
+    return re.sub(r'(\d+(?:\.\d+)?\s*[%٪])\s*$', '\u2066\\1\u2069', t)
 def font(bold, size): return ImageFont.truetype(F700 if bold else F400, size, layout_engine=ImageFont.Layout.RAQM)
 
 def fit(draw, text, bold, size, maxw, rtl=True, min_size=22):
@@ -77,7 +82,9 @@ def render(item, poster=None, logo=None):
     """item: {code, store, value} · poster/logo: PIL Images أو None ⇒ JPEG bytes"""
     img, d = frame()
     code, store = str(item["code"]).strip(), str(item["store"]).strip()
-    value = ar_digits(str(item.get("value") or "").strip())
+    # 🔢 WP-1108: الأرقامُ إنجليزيّة (قراره 16/10 · ورآها «خصم ٢٠%» في مقارنة D-364) — والعربيّةُ في البيانات تُحوَّل لإنجليزيّة
+    # (السطر القديم:) value = ar_digits(str(item.get("value") or "").strip())
+    value = en_digits(str(item.get("value") or "").strip())
     if poster is not None:
         W, H, X, Y = 820, 430, 130, 215
         p = flat(poster)
