@@ -570,6 +570,22 @@ LAYOUT_PICK_JS = """() => {
   const mins = f().filter(x => x != null);
   return {min: mins.length ? +Math.min(...mins).toFixed(3) : null, mode: best.m, t: best.t, pv: g('pv') == null ? null : +g('pv').toFixed(3), ph: g('ph') == null ? null : +g('ph').toFixed(3)};
 }"""
+# 🧺 ═══ WP-1095 (قوله 2026-11-16 «١») — سطرُ العرض فوق الكود يدخل مكانَه بدل ما يطلع برّا ═══
+#   قِيس 16/11: «خصم 10% للعميل الجديد» (يوباي) أعرض من مكانه جنب الكود ⇒ الحروفُ تطلع برّا البطاقة فيرفضها الفاحص ويطيح المصنع.
+#   يصغر الخطُّ درجةً درجة حتى MX_BAR_MIN · وإن ما وسع ⇒ سطران بنفس الخطّ الصغير. يُقاس على ما يُرسم لا بعدد الحروف.
+MX_BAR_MIN = 16
+MX_BAR_FIT_JS = """(MIN) => {
+  const out = [];
+  for (const b of document.querySelectorAll('.bar.c .lb b')) {
+    const over = () => b.scrollWidth > b.clientWidth + 0.5;
+    let f = parseFloat(getComputedStyle(b).fontSize);
+    while (over() && f > MIN) { f -= 1; b.style.fontSize = f + 'px'; }
+    // سطران بكتلةٍ عاديّة لا -webkit-box (الأخيرُ يكسر عزلَ <bdi> فيطلع «%10» بدل «10%» — قِيس بالرسم)
+    if (over()) { b.style.whiteSpace = 'normal'; b.style.lineHeight = '1.2'; b.style.maxHeight = (2.4 * f + 1) + 'px'; out.push('سطرين'); }
+    else if (f < 22) out.push(f + 'px');
+  }
+  return out;
+}"""
 INSPECT_JS = """(H) => {
   const W = document.documentElement.clientWidth, out = [];
   const nm = (e) => '«' + (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 34) + '»';
@@ -618,6 +634,8 @@ def render_az(it, scale=2):
             if mx:
                 lg = pgw.evaluate(MX_LOGO_JS, MX_LOGO_MIN)
                 print("   🏷️ صفحة", pg["page"], "⇐ الشعارات", lg["drawn"], "من", lg["all"], "· الباقي بالحرف")
+                fit = pgw.evaluate(MX_BAR_FIT_JS, MX_BAR_MIN)   # 🧺 WP-1095
+                if fit: print("   🔡 صفحة", pg["page"], "⇐ سطر العرض فوق الكود صغُر:", " · ".join(fit))
             broken = pgw.evaluate("[...document.images].filter(i=>!i.complete||!i.naturalWidth).length")
             pgw.evaluate(FIT_JS, FIT_MIN)
             lp = None
