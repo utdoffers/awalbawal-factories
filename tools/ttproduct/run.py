@@ -255,6 +255,7 @@ def yt_code_slot(a, slot, code, day, rnd):
         if (d or {}).get("stop"): raise YtStop("يوتيوب أوقف الرفع لحدّه — الباقي ينتظر مقعدًا")
         return 0
     api_post("/api/yt/done", {"key": key, "video_id": vid})
+    yt_keep(key, path)   # 🎞️ WP-1102
     say(f"   ✅ رُفع: https://www.youtube.com/shorts/{vid} ({ust}) ← {cl.get('publish_at') or 'الآن'}")
     return 1
 
@@ -290,8 +291,23 @@ def yt_xvid_slot(a, slot, item, code, day, rnd):
         if (d or {}).get("stop"): raise YtStop("يوتيوب أوقف الرفع لحدّه — الباقي ينتظر مقعدًا")
         return 0
     api_post("/api/yt/done", {"key": key, "video_id": vid})
+    yt_keep(key, path)   # 🎞️ WP-1102
     say(f"   ✅ رُفع (من إكس): https://www.youtube.com/shorts/{vid} ({ust}) ← {cl.get('publish_at') or 'الآن'}")
     return 1
+
+def yt_keep(key, path):
+    """🎞️ WP-1102 (D-361 · قوله «٢»): نسخةُ الشورت المرفوع تُرسل للخادم فتُحفظ في R2 وتنزل ريلًا في إنستقرام
+    في دقيقة الشورت نفسِها. تعذّرُها لا يمسّ يوتيوب (الشورتُ رُفع) — يُقال سببُه فقط."""
+    try:
+        size = os.path.getsize(path)
+        if size > 60_000_000: say(f"   ⚠️ نسخةُ الريل أكبر من 60 ميقا ({size//1000000}) — ما أُرسلت"); return 0
+        b = base64.b64encode(open(path, "rb").read()).decode("ascii")
+        r = api_post("/api/yt/media", {"key": key, "b64": b})
+        if r.get("ok"): say(f"   🎞️ نسخةُ الريل محفوظة ({size//1000}KB)"); return 1
+        say("   ⚠️ ما انحفظت نسخةُ الريل:", r.get("why") or r)
+    except Exception as e:
+        say("   ⚠️ ما انحفظت نسخةُ الريل:", e)
+    return 0
 
 class YtStop(Exception):
     """⏳ WP-981: الخادمُ أو يوتيوب قال «لا مقعد» — تقف الدفعةُ كلُّها بلا رسمٍ ولا رفعٍ ضائع."""
@@ -381,6 +397,7 @@ def main_youtube(a):
                         if (d or {}).get("stop"): raise YtStop("يوتيوب أوقف الرفع لحدّه — الباقي ينتظر مقعدًا")
                         done = True; break
                     api_post("/api/yt/done", {"key": key, "video_id": vid})
+                    yt_keep(key, path)   # 🎞️ WP-1102
                     say(f"   ✅ رُفع: https://www.youtube.com/shorts/{vid} ({ust}) ← {cl.get('publish_at') or 'الآن'}")
                     made += 1; done = True; break
                 if not done: say(f"   ↪️ «{k['kind']}» بلا فيديو صالح — النوعُ التالي")
