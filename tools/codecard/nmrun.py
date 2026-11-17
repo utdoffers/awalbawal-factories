@@ -15,22 +15,22 @@ def main():
     if st != 200 or not t.get("ok"):
         say("⛔ nmstamp/todo ردّ", st, t); sys.exit(1)
     items = t.get("items") or []
-    say(f"🏷️ صور نمشي تنتظر شريطَ الكود: {len(items)}" + (f" — {t.get('why')}" if not items and t.get("why") else ""))
+    say(f"🏷️ صور الصيد (نمشي · نون · ترينديول) تنتظر شريطَ الكود: {len(items)}" + (f" — {t.get('why')}" if not items and t.get("why") else ""))
     up = fail = skip = 0
     for it in items:
         p = fetch_img(it.get("src"))
         if p is None:
             skip += 1; say("   ⏭️", it["okey"], "صورتُه ما نزلت — تبقى الأصليّة"); continue
-        jpg = render_nm(it, product=p)
+        jpg = render_nm(it, product=p)   # 🏷️ WP-1132: العبارةُ والكودُ لكلِّ متجر من todo (label · code)
         if DRY:
             os.makedirs("out", exist_ok=True)
             open(os.path.join("out", it["okey"] + ".jpg"), "wb").write(jpg)
             say("   🖌️", it["okey"], f"{len(jpg)//1024}KB {W}×{H} (جافّ)"); continue
         st2, r = api_post("/api/nmstamp/upload", {"okey": it["okey"], "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()})
-        if st2 == 200 and r.get("ok"): up += 1; say("   ✅", it["okey"], f"{len(jpg)//1024}KB")
+        if st2 == 200 and r.get("ok"): up += 1; say("   ✅", it["okey"], it.get("code"), f"{len(jpg)//1024}KB")
         else: fail += 1; say("   ❌", it["okey"], st2, r.get("why") or r)
         time.sleep(0.3)
-    say(f"🧾 نمشي: رُفعت {up} · تُخطّيت {skip} · فشلت {fail}")
+    say(f"🧾 الشريط: رُفعت {up} · تُخطّيت {skip} · فشلت {fail}")
     if fail and not up: sys.exit(1)
 
 if __name__ == "__main__":
