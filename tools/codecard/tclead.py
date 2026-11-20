@@ -31,6 +31,7 @@ EXTRA = """
 .cd.hot{background:#f27a1a}
 .cd.no{background:#eaf6ed;color:#1f7a34;letter-spacing:0;direction:rtl;font-size:22px}
 .n{direction:ltr;unicode-bidi:isolate;display:inline-block}
+.cat .c{padding:0 18px 4px;font-size:21px;color:#8a8a8a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* 🏷️ WP-1193: «في موقع أديداس 299 · في نمشي 249» — بس لما ترينديول أرخص */
 """
 CSS = _BASE + EXTRA
 PCT = lambda s: re.sub(r"(\d+(?:\.\d+)?%)", r'<span class="n">\1</span>', s)
@@ -82,7 +83,7 @@ body{height:1350px;display:flex;flex-direction:column}
 .g3.fill .cat{height:auto;min-height:0}
 .g3.fill .ph{flex:1;height:auto;min-height:0}
 .g3.fill .ph img{max-height:100%;max-width:100%}
-.g3.fill .t,.g3.fill .p{flex:none}
+.g3.fill .t,.g3.fill .p,.g3.fill .c{flex:none}
 .g3.fill .p{padding-bottom:16px}
 .g3.fill.n1{grid-template-columns:1fr}
 .g3.fill.n2,.g3.fill.n3,.g3.fill.n4{grid-template-columns:1fr 1fr}
@@ -107,8 +108,9 @@ def lead_html(it, pics):
     cells = []
     for i, p in enumerate(it.get("items") or []):
         off = ('<div class="o">-%d%%</div>' % int(p["off"])) if p.get("off") else ""
-        cells.append('<div class="cat">%s<div class="ph"><img src="%s"></div><div class="t">%s</div><div class="p">من<b>%s</b>ريال</div></div>'
-                     % (off, pics[i] if i < len(pics) else "", E(p.get("type")), E(num(p.get("now")))))
+        cmp = ('<div class="c">%s</div>' % E(p["cmp"])) if p.get("cmp") else ""   # 🏷️ WP-1193 (D-446)
+        cells.append('<div class="cat">%s<div class="ph"><img src="%s"></div><div class="t">%s</div><div class="p">من<b>%s</b>ريال</div>%s</div>'
+                     % (off, pics[i] if i < len(pics) else "", E(p.get("type")), E(num(p.get("now"))), cmp))
     bar = ('<span>وبكود <b>%s</b> تنزل أكثر</span><span>الروابط في التغريدة</span>' % E(it["code"])) if it.get("code") else '<span>الروابط في التغريدة</span><span></span>'
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + TOP +
             '<h1>%s <em>من %s ريال</em></h1><div class="chips">%s</div><div class="g3 fill n%d">%s</div><div class="bar">%s</div>'
