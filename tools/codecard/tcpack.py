@@ -4,12 +4,19 @@
 #   المصنعُ نفسُه (ty-cards.yml): tyrun.py يأخذ `pack` من /api/tycamp/cards/todo ⇐ هنا HTML بكروم ⇐ JPEG 2160×2700
 #   ⇐ /api/tycamp/cards/upload (cid=pack · ببصمة اليوم وحدها). المقاسُ ثابت 1080×1350 ×2 (قراره 5/11: مقاسُ إكس 4:5 من أوّل مرّة).
 #   كلُّ ما يُرسم يأتي من الخادم (الماركة · المنتج · الأسعار · الكود · كم ماركة باقية). أرقامٌ إنجليزيّة (قراره 16/10).
-import base64, html, io, os
+import base64, html, io, os, re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 F400 = "file://" + os.path.join(HERE, "fonts", "plexfull-400.ttf")
 F700 = "file://" + os.path.join(HERE, "fonts", "plexfull-700.ttf")
 E = lambda s: html.escape(str(s if s is not None else ""))
+
+# 🏷️ WP-1196 (قرارُه 20/11 «١» · Q1915): اسمُ المنتج بلا «#» ولا «@» في أوّل كلماته — نفسُ نمط lib/nametag.js (plainName) حرفًا
+_NM_RE = re.compile(r"(^|[\s(\[{«\"'“‘،,؛;:—–\-|/·•▪️➖+*])[#@＃﹟]+(?=[^\W_]|\d)")
+def plain_name(s):
+    s = str(s if s is not None else "")
+    return re.sub(r"\s{2,}", " ", _NM_RE.sub(r"\1", s)).strip() if re.search(r"[#@＃﹟]", s) else s
+NM = lambda s: E(plain_name(s))
 W, H = 1080, 1350
 MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"]
 
@@ -96,7 +103,7 @@ def pack_html(it, pics):
                      '<div class="brand">%s</div><div class="name">%s</div>'
                      '<div class="price"><span class="now">%s<small> ريال</small></span><span class="was">%s</span></div>'
                      '<div class="code">%s</div></div>'
-                     % (hl, tag, E(p.get("off")), pics[i] if i < len(pics) else "", E(p.get("brand")), E(p.get("title")),
+                     % (hl, tag, E(p.get("off")), pics[i] if i < len(pics) else "", E(p.get("brand")), NM(p.get("title")),
                         E(num(p.get("now"))), E(num(p.get("was"))), code))
     more = int(it.get("more") or 0)
     mtxt = "ماركة ثانية" if more == 1 else "%d ماركات ثانية" % more   # ✍️ WP-1055

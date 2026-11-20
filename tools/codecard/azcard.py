@@ -3,13 +3,20 @@
 #   azrun.py يسأل /api/azbrands/card/todo ⇐ هنا تُرسم كلُّ صفحة HTML بكروم (Playwright) بخطّ IBM Plex Sans Arabic من fonts/
 #   ⇐ JPEG بمقاس إكس 4:5 بالضبط (1080×1350 ×2 = 2160×2700 — قراره 5/11 «انتبه المره الثانيه لاتغلط في المقاس»)
 #   ⇐ /api/azbrands/card/upload (ببصمة القائمة المحسومة وحدها). لا رابطَ ولا سعرَ مكتوبٌ هنا: كلُّ ما يُرسم من الخادم.
-import html, io, os
+import html, re, io, os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 F400 = "file://" + os.path.join(HERE, "fonts", "plexfull-400.ttf")
 F700 = "file://" + os.path.join(HERE, "fonts", "plexfull-700.ttf")
 W, H = 1080, 1350
 E = lambda s: html.escape(str(s if s is not None else ""))
+
+# 🏷️ WP-1196 (قرارُه 20/11 «١» · Q1915): اسمُ المنتج بلا «#» ولا «@» في أوّل كلماته — نفسُ نمط lib/nametag.js (plainName) حرفًا
+_NM_RE = re.compile(r"(^|[\s(\[{«\"'“‘،,؛;:—–\-|/·•▪️➖+*])[#@＃﹟]+(?=[^\W_]|\d)")
+def plain_name(s):
+    s = str(s if s is not None else "")
+    return re.sub(r"\s{2,}", " ", _NM_RE.sub(r"\1", s)).strip() if re.search(r"[#@＃﹟]", s) else s
+NM = lambda s: E(plain_name(s))
 
 CSS = """
 @font-face{font-family:Plex;src:url('%s');font-weight:400}
@@ -157,7 +164,7 @@ def gcell(p):
             '<div class="nm">%s</div>%s%s'
             '<div class="gpr">%s<span class="now">%s</span><span class="cur">ريال</span></div>'
             '<div class="gpr2">%s%s</div>%s</div></div>'
-            % (tg, img, E(p.get("name")), fr, sub, fm, E(p.get("price")), szc, was, sz))
+            % (tg, img, NM(p.get("name")), fr, sub, fm, E(p.get("price")), szc, was, sz))
 
 
 def guide_html(it, pg):
@@ -262,7 +269,7 @@ def cell(p, span=False):
     return ('<div class="card%s">%s<div class="pic">%s</div><div class="info">'
             '<div class="nm">%s</div><div class="sub">%s</div>'
             '<div class="pr"><span class="now">%s</span><span class="cur">ريال</span>%s</div>%s</div></div>'
-            % (" span2" if span else "", tag, img, E(p.get("name")), E(p.get("sub")), E(p.get("price")), was, sz))
+            % (" span2" if span else "", tag, img, NM(p.get("name")), E(p.get("sub")), E(p.get("price")), was, sz))
 
 
 # 🖼️ WP-1004: قالبُ البطاقة — الصورةُ هي البطل. يُلحق بعد قالب الطبقة (ab1 · ag1 · ae1) فيعلو عليه، ولونُ السعر من --acc لكلِّ طبقة.
@@ -349,7 +356,7 @@ def cp_cell(p, cls, tag=""):
     was = ('<span class="was">%s</span><span class="off" dir="ltr">-%s%%</span>' % (E(p.get("was")), E(p.get("pct")))) if p.get("was") not in (None, "") else ""
     return ('<div class="card %s"><div class="pic">%s</div><div class="info">%s<div class="nm">%s</div>'
             '<div class="pr"><span class="now">%s</span><span class="cur">ريال</span>%s</div></div></div>'
-            % (cls, img, ('<div class="tag">%s</div>' % E(tag)) if tag else "", E(p.get("name")), E(p.get("price")), was))
+            % (cls, img, ('<div class="tag">%s</div>' % E(tag)) if tag else "", NM(p.get("name")), E(p.get("price")), was))
 
 
 def comp_html(it, pg):

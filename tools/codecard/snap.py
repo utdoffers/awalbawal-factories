@@ -8,6 +8,14 @@
 # ⚖️ كلُّ نصٍّ من البيانات حرفًا. الأرقامُ إنجليزيّة. والمهمُّ كلُّه داخل منطقة سناب الآمنة (225…1425).
 import io, os, re
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, features
+
+import re as _re_nm
+# 🏷️ WP-1196 (Q1915): اسمُ المنتج بلا «#» ولا «@» في أوّل كلماته — نفسُ نمط lib/nametag.js (plainName)
+_NM_RE = _re_nm.compile(r"(^|[\s(\[{«\"'“‘،,؛;:—–\-|/·•▪️➖+*])[#@＃﹟]+(?=[^\W_]|\d)")
+def plain_name(s):
+    s = str(s if s is not None else "")
+    return _re_nm.sub(r"\s{2,}", " ", _NM_RE.sub(r"\1", s)).strip() if _re_nm.search(r"[#@＃﹟]", s) else s
+
 assert features.check("raqm"), "لا raqm ⇒ لن يتشكّل العربي"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -204,7 +212,7 @@ def r_live(it, logo=None, poster=None):
     # 🚫 بلا شارات «عرض حي» ولا «منقول» ولا «متحقَّق منه» — قرارُه 2026-10-22:
     #    «كلمه عرض حي او منقول غير مناسبه في التصاميم … هو طبيعي منقول لاني كاتب اسم المتجر»
     def block(d, y, real=True):
-        y = para(d, W - 80, y, it.get("name") or "", True, 78, CH, 920, max_lines=3, gap=1.25, anchor="ra")
+        y = para(d, W - 80, y, plain_name(it.get("name") or ""), True, 78, CH, 920, max_lines=3, gap=1.25, anchor="ra")
         d.rectangle((W - 80 - 160, y + 18, W - 80, y + 26), fill=RED)
         y += 70
         if it.get("detail"): y = para(d, W - 80, y, it["detail"], False, 46, (60, 60, 60), 920, max_lines=3, anchor="ra") + 20
