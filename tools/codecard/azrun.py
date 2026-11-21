@@ -33,7 +33,8 @@ KINDS = [("azbrands", lambda: api("/api/azbrands/card/todo"), lambda b: api_post
 # 🖼️ WP-1015: الأبوابُ التي تقبل «صفحة انمنعت» (lib/azcard.js acUpload · blocked) — فيعرف الخادمُ فورًا أنّ التصميمَ ناقصٌ وسببَه،
 #   فتنزل الصفحاتُ السليمة تصميمًا والممنوعةُ بصور منتجاتها، ويرنّ الجرس «card_short». المرافقُ والمخلوطةُ لهما أبوابٌ غيرُها.
 #   🖼️ WP-1208: ومع البلاغ أرقامُ بطاقات المنتجات الصغيرة فعلًا (`small`) ⇒ الخادمُ يطلّعها من القائمة ويدخل بديلُها ويُنادى المصنعُ من جديد.
-BLOCK_REPORT = {"azbrands", "azgrocery", "aebrands", "aeguide", "azguide"}
+#   🖼️ WP-1210: وبطاقةُ المخلوطة/متجر اليوم (mixcard) تبلّغ كذلك بخانتها — صورةٌ ما نزلت ⇒ منتجُها يطلع ويدخل بديلُه من منتجات المتجر نفسِه.
+BLOCK_REPORT = {"azbrands", "azgrocery", "aebrands", "aeguide", "azguide", "mixcard"}
 
 
 def one(route, todo, upload, icon, pre):
@@ -60,7 +61,7 @@ def one(route, todo, upload, icon, pre):
             if not DRY:
                 fail += 1
                 if route in BLOCK_REPORT:
-                    st3, r3 = upload({"sig": it["sig"], "page": page, "blocked": " · ".join(over)[:300], **({"small": small} if small else {})})
+                    st3, r3 = upload({"sig": it["sig"], "page": page, "blocked": " · ".join(over)[:300], **({"small": small} if small else {}), **({"slot": it["slot"]} if it.get("slot") else {})})
                     say("   📮 بلّغ الخادم إن الصفحة انمنعت:", "وصل" if st3 == 200 and r3.get("ok") else (st3, r3.get("why") or r3))
                     if r3.get("swap"): say("   🔁 الخادم:", r3["swap"])
                 continue

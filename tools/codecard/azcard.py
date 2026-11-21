@@ -201,11 +201,26 @@ def guide_html(it, pg):
 
 # 🖼️ WP-991: صورةُ الموديل — يختارها Claude (sonnet) في الخادم لحظةَ الحسم: رقمُ الصورة بلا كتابة + مربّعُ الجهاز (pic).
 #   جُرّب قبله «أكثرُها بياضًا» على صور TCL فاختار إنفوجرافيك الضمان (أبيضُ بكتابةٍ حمراء) للأربع ⇒ شيل. بلا اختيار Claude ⇒ الصورةُ الأولى كما كانت.
+# 🖼️ WP-1210 (أ) — قوله 21/11/2026 «آ و ب بشكل جذري» بعد بطاقة متجر اليوم كروكس 7م بصورٍ مكسورة:
+#   كانت الهويةُ «…Chrome/130 Safari/537.36» (بلا KHTML) ⇒ موقعُ كروكس ردّ 403 (3 من 3 من ماكك) · والهويةُ الكاملةُ ردّت 200 (3 من 3).
+#   الآن: هويةُ متصفحٍ كاملة + ترويساتُ صورةٍ كالمتصفح · وإن ردّ الموقعُ 403/429 تُعاد مرّةً بهوية آيفون. وكرومُ الرسم نفسُه بالهوية الكاملة.
+IMG_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+IMG_UA_ALT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+IMG_HEADERS = {"Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "Accept-Language": "ar-SA,ar;q=0.9,en;q=0.8"}
+
+
 def _img_get(url, timeout=12):
-    import urllib.request
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130 Safari/537.36"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
+    import urllib.request, urllib.error
+    last = None
+    for ua in (IMG_UA, IMG_UA_ALT):
+        req = urllib.request.Request(url, headers={"User-Agent": ua, **IMG_HEADERS})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            last = e
+            if e.code not in (403, 429): raise
+    raise last
 
 
 CROP_SPECK = 0.30   # 🖼️ WP-1208: منتجٌ أصغرُ من 30% من صورته طولًا وعرضًا = نقطة ⇒ ما يُقصّ (والحارسُ يمسكه «ما يملأ مكانه»)
@@ -597,6 +612,34 @@ def pic_small(cards, box=None):
         if d is not None and d < box:
             out.append({**x, "why": "صورة المنتج «%s» ما تملأ مكانها (%d%% — الحد %d%%)" % (x.get("nm", ""), round(d * 100), round(box * 100))})
     return out
+# 🖼️ ═══ WP-1210 (ب) — صورةٌ ما نزلت = الصفحةُ تنمنع، ومنتجُها ياخذ مكانه البديل ═══
+#   قوله 21/11/2026 «آ و ب بشكل جذري» بعد كروكس 7م: الستّ صورٍ مكسورة والمصنعُ كتب «⚠️ صورة ما نزلت» ورفعها ⇒ نزلت مربّعاتٌ بيضاء.
+#   الآن: كلُّ بطاقة منتجٍ مكانُ صورتها فاضي أو صورتُها ما تحمّلت ⇒ عيبٌ يوقف الصفحة (مثل «صورة صغيرة») ورقمُها مع البلاغ
+#   فيطلع المنتجُ ويدخل بديلُه · وأيُّ صورةٍ أخرى في الصفحة ما نزلت (خارج بطاقات المنتجات) ⇒ عيبٌ يوقفها كذلك.
+BROKEN_JS = """() => {
+  const nm = (c) => ((c.querySelector('.nm') || {}).textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 30);
+  const cards = [...document.querySelectorAll('.card')].map((c, i) => {
+    const b = c.querySelector('.pic'); if (!b) return null;
+    const im = b.querySelector('img');
+    return (!im || !im.complete || !im.naturalWidth) ? {i, nm: nm(c), empty: !im} : null;
+  }).filter(Boolean);
+  const loose = [...document.images].filter((im) => !im.closest('.card .pic') && (!im.complete || !im.naturalWidth)).length;
+  return {cards, loose};
+}"""
+
+
+def pic_broken(res):
+    """🖼️ WP-1210 (ب): نتيجةُ BROKEN_JS ⇒ (أرقامُ البطاقات اللي صورتُها ما نزلت · العيوبُ بالعربي). نقيّة."""
+    res = res or {}
+    idx, why = [], []
+    for x in res.get("cards") or []:
+        idx.append(int(x["i"]))
+        why.append("صورة المنتج «%s» %s" % (x.get("nm", ""), "مكانها فاضي" if x.get("empty") else "ما نزلت (الموقع رفضها أو انكسرت)"))
+    if int(res.get("loose") or 0):
+        why.append("%d صورة في الصفحة ما نزلت" % int(res["loose"]))
+    return idx, why
+
+
 PIC_AREA_JS = """() => [...document.querySelectorAll('.card')].map(c => {
   const im = c.querySelector('.pic img'), b = c.querySelector('.pic');
   if (!im || !b || !im.naturalWidth) return null;
@@ -672,7 +715,7 @@ def render_az(it, scale=2):
     out = []
     with sync_playwright() as pw:
         b = pw.chromium.launch()
-        pgw = b.new_page(viewport={"width": W, "height": H}, device_scale_factor=scale)
+        pgw = b.new_page(viewport={"width": W, "height": H}, device_scale_factor=scale, user_agent=IMG_UA)   # 🖼️ WP-1210 (أ): لا «HeadlessChrome»
         guide = it.get("layout") in GD_CSS   # 📗 WP-1207: gd1 (علي إكسبريس) · gd2 (أمازون) — بطاقةُ الدليل نفسُها
         mx = it.get("layout") == "mx1"   # 🖼️ WP-1005: بطاقةُ المخلوطة — شعاراتٌ لا صورُ منتجات
         if guide: prep_guide_imgs(it)   # 🖼️ WP-991: أنظفُ صورةٍ من معرض كلِّ موديل
@@ -703,6 +746,11 @@ def render_az(it, scale=2):
             if lp:
                 for x in pic_small(pgw.evaluate(PIC_FILL_JS)):
                     over = list(over) + [x["why"]]; small.append(x["i"])
+            # 🖼️ WP-1210 (ب): صورةٌ ما نزلت ⇒ عيبٌ يوقف الصفحة ورقمُ بطاقتها مع «الصغيرة» (الخادمُ يبدّلها بنفس الباب)
+            bidx, bwhy = pic_broken(pgw.evaluate(BROKEN_JS))
+            if bwhy: over = list(over) + bwhy
+            for i in bidx:
+                if i not in small: small.append(i)
             png = pgw.screenshot(clip={"x": 0, "y": 0, "width": W, "height": H})
             im = Image.open(io.BytesIO(png)).convert("RGB")
             assert im.size == (W * scale, H * scale), im.size
