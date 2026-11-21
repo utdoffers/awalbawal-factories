@@ -22,6 +22,8 @@ KINDS = [("azbrands", lambda: api("/api/azbrands/card/todo"), lambda b: api_post
          ("aebrands", lambda: api("/api/aebrands/card/todo"), lambda b: api_post("/api/aebrands/card/upload", b), "🏷️", "ae"),
          # 📺 WP-969: دليلُ شراء علي إكسبريس (23:00 الحسم · 23:30 النشر) بقالب ae1 وعنوان الدليل
          ("aeguide", lambda: api("/api/aeguide/card/todo"), lambda b: api_post("/api/aeguide/card/upload", b), "📺", "ag2"),
+         # 📗 WP-1207: دليلُ شراء أمازون (16:00 الحسم · 16:30 النشر) بقالب gd2
+         ("azguide", lambda: api("/api/azguide/card/todo"), lambda b: api_post("/api/azguide/card/upload", b), "📗", "zg"),
          # ➕ WP-995: بطاقاتُ المرافق (الصيدة + ما يكمّلها) بقالب cp1 — عدّةُ بطاقاتٍ في الدورة (لكلِّ صيدةٍ بطاقة)
          ("companion", lambda: api("/api/companion/card/todo"), lambda b: api_post("/api/companion/card/upload", b), "➕", "cp"),
          # 🖼️ WP-1005 (D-295): بطاقةُ التجميعة المخلوطة (الصبح 10:00 · المغرب 19:00) بقالب mx1 — بندٌ لكلِّ خانة ببصمة خطّتها
@@ -30,7 +32,7 @@ KINDS = [("azbrands", lambda: api("/api/azbrands/card/todo"), lambda b: api_post
 
 # 🖼️ WP-1015: الأبوابُ التي تقبل «صفحة انمنعت» (lib/azcard.js acUpload · blocked) — فيعرف الخادمُ فورًا أنّ التصميمَ ناقصٌ وسببَه،
 #   فتنزل الصفحاتُ السليمة تصميمًا والممنوعةُ بصور منتجاتها، ويرنّ الجرس «card_short». المرافقُ والمخلوطةُ لهما أبوابٌ غيرُها.
-BLOCK_REPORT = {"azbrands", "azgrocery", "aebrands", "aeguide"}
+BLOCK_REPORT = {"azbrands", "azgrocery", "aebrands", "aeguide", "azguide"}
 
 
 def one(route, todo, upload, icon, pre):

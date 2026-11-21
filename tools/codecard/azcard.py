@@ -147,6 +147,22 @@ body.t2 .sub{display:none} body.t2 .sz{display:none}
 .foot{margin-top:14px}
 """
 
+# 📗 WP-1207 — قالبُ «دليل شراء أمازون» (gd2): gd1 نفسُه حرفًا بألوان أمازون (كحليّ #232f3e وبرتقاليّ #ff9900) بدل أحمر علي إكسبريس.
+CSS_GD_AZ = CSS_GD + """
+body{background:#f5f6f7}
+.logo b{color:#ff9900}
+.pill{background:#232f3e} .pill span{color:#ffb84d}
+h1 .g{color:#e47911}
+.gcard{border-color:#e3e6ea}
+.gcard .tg{background:#232f3e} .gcard .tg.hot{background:#e47911}
+.fr{color:#b05c00}
+.gpr .now{color:#b12704}
+.gpr2 .szc{background:#fff1dc;color:#8a4b00}
+.gpr2 .off{background:#cc0c39}
+"""
+GD_CSS = {"gd1": CSS_GD, "gd2": CSS_GD_AZ}
+GD_STORE = {"gd1": "علي إكسبريس", "gd2": "أمازون"}
+
 
 def gcell(p):
     tag = str(p.get("tag") or "")
@@ -179,7 +195,7 @@ def guide_html(it, pg):
             '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول</div><div class="pill">%s · <span>%s</span></div></div>'
             '%s<div class="subt">%s</div>%s'
             '<div class="foot"><div>الأسعار%s %s %s · تتغير بأي لحظة</div><div dir="ltr">@awalbawal_sa</div></div>'
-            '</body></html>') % (CSS_GD, E(it.get("store") or "علي إكسبريس"), E(it.get("pill")), h1, E(it.get("sub")), grid,
+            '</body></html>') % (GD_CSS.get(it.get("layout"), CSS_GD), E(it.get("store") or GD_STORE.get(it.get("layout"), "علي إكسبريس")), E(it.get("pill")), h1, E(it.get("sub")), grid,
                                  " والمقاسات" if it.get("sized") else "", E(it.get("foot") or ""), E(it.get("date")))
 
 
@@ -626,7 +642,7 @@ def render_az(it, scale=2):
     with sync_playwright() as pw:
         b = pw.chromium.launch()
         pgw = b.new_page(viewport={"width": W, "height": H}, device_scale_factor=scale)
-        guide = it.get("layout") == "gd1"
+        guide = it.get("layout") in GD_CSS   # 📗 WP-1207: gd1 (علي إكسبريس) · gd2 (أمازون) — بطاقةُ الدليل نفسُها
         mx = it.get("layout") == "mx1"   # 🖼️ WP-1005: بطاقةُ المخلوطة — شعاراتٌ لا صورُ منتجات
         if guide: prep_guide_imgs(it)   # 🖼️ WP-991: أنظفُ صورةٍ من معرض كلِّ موديل
         elif mx: prep_mx_logos(it)      # 🏷️ WP-1005: الشعاراتُ مقصوصةُ الحواف · الأيقوناتُ الصغيرة تُتخطّى
