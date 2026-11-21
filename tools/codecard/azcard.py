@@ -208,6 +208,9 @@ def _img_get(url, timeout=12):
         return r.read()
 
 
+CROP_SPECK = 0.30   # 🖼️ WP-1208: منتجٌ أصغرُ من 30% من صورته طولًا وعرضًا = نقطة ⇒ ما يُقصّ (والحارسُ يمسكه «ما يملأ مكانه»)
+
+
 def crop_white(im, pad=0.04):
     """يقصّ الحوافَّ البيضاء حول المنتج (مع هامشٍ صغير) — المنتجُ يملأ مكانه. نقيّة."""
     from PIL import ImageChops, Image
@@ -217,8 +220,11 @@ def crop_white(im, pad=0.04):
     box = diff.getbbox()
     if not box: return rgb
     w, h = rgb.size; px, py = int(w * pad), int(h * pad)
+    # 🖼️ WP-1208: كان «أقلّ من 15% من المساحة ⇒ بلا قصّ» فيتخطّى المنتجَ العريضَ النحيف (ويفر ميموريز 45%×22% = 9.7%) ويُرسم صغيرًا في
+    #   وسط بياضه — قِيس 21/11 على 41 صورة: اثنتان تخطّاهما وكلتاهما منتجٌ حقيقيّ. الآن يتخطّى «النقطة» وحدها: أصغرُ من CROP_SPECK في الاتجاهين
+    #   (قبل الهامش — نفسُ مقياس img_fill).
+    if max((box[2] - box[0]) / w, (box[3] - box[1]) / h) < CROP_SPECK: return rgb
     box = (max(0, box[0] - px), max(0, box[1] - py), min(w, box[2] + px), min(h, box[3] + py))
-    if (box[2] - box[0]) * (box[3] - box[1]) < 0.15 * w * h: return rgb
     return rgb.crop(box)
 
 
@@ -229,6 +235,18 @@ def crop_box(im, box, pad=0.03):
     x0, y0, x1, y1 = max(0, x0 - pad), max(0, y0 - pad), min(1, x1 + pad), min(1, y1 + pad)
     if (x1 - x0) < 0.2 or (y1 - y0) < 0.2: return rgb
     return rgb.crop((int(x0 * w), int(y0 * h), int(x1 * w), int(y1 * h)))
+
+
+def img_fill(im):
+    """🖼️ WP-1208: كم يملأ المنتجُ صورتَه **بعد القصّ** (أكبرُ اتجاه · 1.0 = كاملة). crop_white يقصّ الحوافَّ ويترك هامشًا مقصودًا
+    ⇒ 1.0 · ويتخطّى القصَّ إذا المنتجُ نقطةٌ (أصغرُ من CROP_SPECK طولًا وعرضًا) ⇒ نسبتُه الحقيقيّة. تُحسب على الصورة الأصليّة. نقيّة."""
+    from PIL import ImageChops, Image
+    rgb = im.convert("RGB"); w, h = rgb.size
+    bg = Image.new("RGB", rgb.size, (255, 255, 255))
+    box = ImageChops.difference(rgb, bg).convert("L").point(lambda x: 255 if x > 22 else 0).getbbox()
+    if not box or not w or not h: return 1.0
+    m = max((box[2] - box[0]) / w, (box[3] - box[1]) / h)
+    return 1.0 if m >= CROP_SPECK else round(m, 3)   # = شرطُ crop_white: انقصّت ⇒ تملأ صورتَها
 
 
 def _uri(im):
@@ -267,10 +285,12 @@ def prep_card_imgs(it, get=_img_get, say=print):
             if u not in seen:
                 try:
                     im = Image.open(io.BytesIO(get(u))); im.load()
-                    seen[u] = _uri(crop_white(im))
+                    cw = crop_white(im)
+                    seen[u] = (_uri(cw), img_fill(im))   # 🖼️ WP-1208: ومعها كم يملأ المنتجُ صورتَه بعد القصّ
                 except Exception as e:
-                    seen[u] = u; say("   🖼️", str(p.get("name"))[:30], "⇐ ما انقصّت (الرابط كما هو):", repr(e)[:60])
-            p["img"] = seen[u]
+                    seen[u] = (u, None); say("   🖼️", str(p.get("name"))[:30], "⇐ ما انقصّت (الرابط كما هو):", repr(e)[:60])
+            p["img"], pf = seen[u]
+            if pf is not None: p["pf"] = pf
 
 
 def cell(p, span=False):
@@ -282,10 +302,11 @@ def cell(p, span=False):
     img = ('<img src="%s">' % E(p["img"])) if p.get("img") else ""
     was = ('<span class="bd">بدل</span><span class="was">%s</span><span class="off" dir="ltr">-%s%%</span>' % (E(p.get("was")), E(p.get("pct")))) if p.get("was") not in (None, "") else ""
     tag = ('<div class="ctg">%s</div>' % E(p["tag"])) if p.get("tag") else ""
-    return ('<div class="card%s">%s<div class="pic">%s</div><div class="info">'
+    pf = (' data-pf="%.3f"' % float(p["pf"])) if p.get("pf") is not None else ""   # 🖼️ WP-1208: امتلاءُ المنتج داخل صورته
+    return ('<div class="card%s"%s>%s<div class="pic">%s</div><div class="info">'
             '<div class="nm">%s</div><div class="sub">%s</div>'
             '<div class="pr"><span class="now">%s</span><span class="cur">ريال</span>%s</div>%s</div></div>'
-            % (" span2" if span else "", tag, img, NM(p.get("name")), E(p.get("sub")), E(p.get("price")), was, sz))
+            % (" span2" if span else "", pf, tag, img, NM(p.get("name")), E(p.get("sub")), E(p.get("price")), was, sz))
 
 
 # 🖼️ WP-1004: قالبُ البطاقة — الصورةُ هي البطل. يُلحق بعد قالب الطبقة (ab1 · ag1 · ae1) فيعلو عليه، ولونُ السعر من --acc لكلِّ طبقة.
@@ -547,26 +568,35 @@ CARDS_FIT_JS = """() => {
 }"""
 # 🖼️ WP-1004: الصورةُ فوق أو جنب؟ — تُقاس مساحةُ المنتج المرسومة فعلًا (بنسبة صورته بعد القصّ) في الوضعين، ويُختار الأكبرُ للصفحة كلّها
 #   (الجزمةُ والشنطة عريضة ⇒ فوق · العطرُ والجوال طويل ⇒ جنب). بطاقاتُ الصفّ العريض (rows · span2) جنبٌ دائمًا.
-PIC_MIN = 0.10      # أصغرُ نسبةٍ لمساحة المنتج من بطاقته
-# 🖼️ WP-1015 (قوله 10/11 «١» بعد تجميعة البقالة 15:21 نزلت بصور المنتجات): الحارسُ كان يقيس المساحةَ وحدها فصرخ في صورةٍ سليمة —
-#   قارورةُ زيت نادك نحيفةٌ طويلة في بطاقة سطرٍ عريضة (992×293): تملأ 85% من طول بطاقتها (أكبرُ ما يمكن) ومساحتُها 6% ⇒ منع الصفحةَ الثانية
-#   فنزلت التجميعةُ كلُّها بصور المنتجات (وماركاتُ أمازون 7% نفسَ اليوم). «صغيرة» الآن = مساحتُها أقلُّ من PIC_MIN **و**ما تملأ
-#   PIC_FILL من طول بطاقتها ولا من عرضها — فالجزمةُ القديمةُ 170×85 في 490×450 (تملأ 35%) تُمسك كما كانت، والقارورةُ الطويلة تمرّ.
-PIC_FILL = 0.60     # أقلُّ ما يملؤه المنتجُ من طول بطاقته أو عرضها حتى لا يُعدّ صغيرًا ولو كانت مساحتُه أقلَّ من PIC_MIN
-PIC_FILL_JS = """() => [...document.querySelectorAll('.card')].map(c => {
+# 🖼️ ═══ WP-1208 (قوله 21 نوفمبر 2026 «٢» بعد تجميعة البقالة 15:00 نزلت بصور المنتجات) — «صغيرة» تُقاس على مكان المنتج لا على البطاقة كلّها ═══
+#   قِيس: يوم الحلويات (ثلاثة أعمدة) والاسمُ سطرين ⇒ مكانُ الصورة 59% من طول البطاقة، وعلبةُ برينجلز النحيفة تملأ مكانَها 100%
+#   (بطولِ جيرانها بالضبط) ⇒ الحارسُ القديم (9% من البطاقة و59% < 60%) منع الصفحةَ الوحيدة فنزلت التجميعةُ كلُّها بصور المنتجات.
+#   «صغيرة» الآن = المنتجُ ما يملأ PIC_BOX من مكانه في أيّ اتجاه (صورةٌ ما انقصّت: المنتجُ نقطةٌ في وسط بياضها — crop_white · CROP_SPECK).
+#   وقِيس أنّ الشطرَ الثاني المقترح «مكانُ الصورة أقلّ من 50% من البطاقة» يمنع كلَّ التصاميم المعتمدة (الصورةُ جنب = 40% من العرض ·
+#   35–37% من المساحة في ab1 · ag1 · ae1 · sw1) ⇒ ما انبنى. ومقارنةُ المنتج بجيرانه في البطاقة صرخت في الصفّ العريض المعتمد (منتجٌ عريض
+#   يملأ مكانه 100% = 42% من البطاقة) ⇒ ما انبنت. فالمنتجُ اللي يملأ مكانَه ما يُعدّ صغيرًا أبدًا — اختيارُ فوق/جنب للصفحة (WP-1004) يكبّره.
+#   والمنتجُ الصغير فعلًا ما يوقف الصفحةَ بلا بديل: المصنعُ يقول رقمَه للخادم ⇒ يطلع من القائمة ويدخل بديلُه (lib/azcard.js · acSwapTake).
+PIC_BOX = 0.90      # أقلُّ ما يملؤه المنتجُ من مكانه (الطول أو العرض)
+PIC_FILL_JS = """() => [...document.querySelectorAll('.card')].map((c, i) => {
   const im = c.querySelector('.pic img'), b = c.querySelector('.pic');
   if (!im || !b || !im.naturalWidth) return null;
   const r = b.getBoundingClientRect(), k = Math.min(r.width / im.naturalWidth, r.height / im.naturalHeight);
-  const w = im.naturalWidth * k, h = im.naturalHeight * k;
-  return {a: +(w * h / (c.clientWidth * c.clientHeight)).toFixed(3), f: +Math.max(w / c.clientWidth, h / c.clientHeight).toFixed(2),
+  const w = im.naturalWidth * k, h = im.naturalHeight * k, pf = parseFloat(c.dataset.pf || '1') || 1;
+  return {i, a: +(w * h / (c.clientWidth * c.clientHeight)).toFixed(3), f: +Math.max(w / c.clientWidth, h / c.clientHeight).toFixed(2),
+          d: +(Math.max(w / r.width, h / r.height) * pf).toFixed(2),
           nm: ((c.querySelector('.nm') || {}).textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 30)};
 })"""
 
 
-def pic_small(cards, amin=None, fmin=None):
-    """🖼️ WP-1015: البطاقاتُ التي منتجُها صغيرٌ فعلًا — مساحتُه < amin **و** ما يملأ fmin من طولها ولا عرضها."""
-    amin = PIC_MIN if amin is None else amin; fmin = PIC_FILL if fmin is None else fmin
-    return [x for x in (cards or []) if x and x.get("a") is not None and x["a"] < amin and x.get("f", 0) < fmin]
+def pic_small(cards, box=None):
+    """🖼️ WP-1208: البطاقاتُ اللي منتجُها ما يملأ مكانَه (`d` = امتلاؤه من مكانه × امتلاؤه من صورته) — كلُّ واحدةٍ ومعها `why` بالعربي."""
+    box = PIC_BOX if box is None else box
+    out = []
+    for x in (cards or []):
+        d = x.get("d", 1.0) if x else None
+        if d is not None and d < box:
+            out.append({**x, "why": "صورة المنتج «%s» ما تملأ مكانها (%d%% — الحد %d%%)" % (x.get("nm", ""), round(d * 100), round(box * 100))})
+    return out
 PIC_AREA_JS = """() => [...document.querySelectorAll('.card')].map(c => {
   const im = c.querySelector('.pic img'), b = c.querySelector('.pic');
   if (!im || !b || !im.naturalWidth) return null;
@@ -635,7 +665,8 @@ INSPECT_JS = """(H) => {
 
 
 def render_az(it, scale=2):
-    """كلُّ صفحة ⇒ JPEG 2160×2700 بالضبط. يعيد [(page, jpg, broken_imgs, issues)] — issues قائمةُ عيوبٍ بالعربي (WP-973)، فاضيةٌ = سليمة."""
+    """كلُّ صفحة ⇒ JPEG 2160×2700 بالضبط. يعيد [(page, jpg, broken_imgs, issues, small)] — issues قائمةُ عيوبٍ بالعربي (WP-973)، فاضيةٌ = سليمة
+    · small أرقامُ بطاقات المنتجات الصغيرة فعلًا (WP-1208)."""
     from playwright.sync_api import sync_playwright
     from PIL import Image
     out = []
@@ -668,16 +699,16 @@ def render_az(it, scale=2):
             pgw.evaluate(CARDS_FIT_JS)
             over = pgw.evaluate(INSPECT_JS, H)
             # 🖼️ WP-1004: حارسُ «صورة صغيرة» ⇒ عيبٌ يوقف الصفحة · 🖼️ WP-1015: يُقاس بعد التضييق (ما يراه القارئ) وبالمساحة **والامتلاء** معًا
+            small = []   # 🖼️ WP-1208: أرقامُ البطاقات (بترتيب منتجات الصفحة) اللي منتجُها صغيرٌ فعلًا — الخادمُ يبدّلها
             if lp:
                 for x in pic_small(pgw.evaluate(PIC_FILL_JS)):
-                    over = list(over) + ["صورة المنتج صغيرة في بطاقتها «%s» (%d%% من البطاقة وتملأ %d%% من طولها أو عرضها — الحد %d%% أو %d%%)"
-                                         % (x["nm"], round(x["a"] * 100), round(x["f"] * 100), round(PIC_MIN * 100), round(PIC_FILL * 100))]
+                    over = list(over) + [x["why"]]; small.append(x["i"])
             png = pgw.screenshot(clip={"x": 0, "y": 0, "width": W, "height": H})
             im = Image.open(io.BytesIO(png)).convert("RGB")
             assert im.size == (W * scale, H * scale), im.size
             for q in (86, 80, 72, 64):
                 buf = io.BytesIO(); im.save(buf, "JPEG", quality=q, optimize=True)
                 if buf.tell() <= 1150000: break
-            out.append((pg["page"], buf.getvalue(), broken, over))
+            out.append((pg["page"], buf.getvalue(), broken, over, small))
         b.close()
     return out

@@ -32,6 +32,7 @@ KINDS = [("azbrands", lambda: api("/api/azbrands/card/todo"), lambda b: api_post
 
 # 🖼️ WP-1015: الأبوابُ التي تقبل «صفحة انمنعت» (lib/azcard.js acUpload · blocked) — فيعرف الخادمُ فورًا أنّ التصميمَ ناقصٌ وسببَه،
 #   فتنزل الصفحاتُ السليمة تصميمًا والممنوعةُ بصور منتجاتها، ويرنّ الجرس «card_short». المرافقُ والمخلوطةُ لهما أبوابٌ غيرُها.
+#   🖼️ WP-1208: ومع البلاغ أرقامُ بطاقات المنتجات الصغيرة فعلًا (`small`) ⇒ الخادمُ يطلّعها من القائمة ويدخل بديلُها ويُنادى المصنعُ من جديد.
 BLOCK_REPORT = {"azbrands", "azgrocery", "aebrands", "aeguide", "azguide"}
 
 
@@ -50,7 +51,7 @@ def one(route, todo, upload, icon, pre):
     up = fail = 0
     for it in todo_items:
       say(f"{icon} {it.get('hl')} · {sum(len(p['items']) for p in it['pages'])} منتجات · {len(it['pages'])} صفحة · التصميم {t.get('layout')}")
-      for page, jpg, broken, over in render_az(it):
+      for page, jpg, broken, over, small in render_az(it):
         tag = f"صفحة {page}/{len(it['pages'])} · {len(jpg)//1024}KB" + (f" · ⚠️ {broken} صورة ما نزلت" if broken else "")
         # 🖼️ WP-973: صفحةٌ فيها عيبٌ يراه القارئ (عنوانٌ طالع برّا · حرفٌ مقصوص · بطاقةٌ أطولُ من مكانها) لا تُرفع
         #   ⇐ التجميعةُ تنزل بصور المنتجات (احتياطُ WP-962) بدل صورةٍ مقصوصة. السببُ مكتوبٌ في السجلّ بكلماته.
@@ -59,8 +60,9 @@ def one(route, todo, upload, icon, pre):
             if not DRY:
                 fail += 1
                 if route in BLOCK_REPORT:
-                    st3, r3 = upload({"sig": it["sig"], "page": page, "blocked": " · ".join(over)[:300]})
+                    st3, r3 = upload({"sig": it["sig"], "page": page, "blocked": " · ".join(over)[:300], **({"small": small} if small else {})})
                     say("   📮 بلّغ الخادم إن الصفحة انمنعت:", "وصل" if st3 == 200 and r3.get("ok") else (st3, r3.get("why") or r3))
+                    if r3.get("swap"): say("   🔁 الخادم:", r3["swap"])
                 continue
         if DRY:
             os.makedirs("out", exist_ok=True)
