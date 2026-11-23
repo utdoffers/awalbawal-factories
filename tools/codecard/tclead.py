@@ -73,6 +73,17 @@ body{height:1350px;box-sizing:border-box;display:flex;flex-direction:column}
 .list.big.n1 .ic,.list.big.n1 .ic.pic{width:440px;height:440px;font-size:150px}
 .list.big.n1 .nm .a{font-size:64px}
 .list.big.n1 .nm .b{font-size:38px}
+/* 🧾 WP-1230 (قوله 2026-11-23 «١»): ٥–٧ صفوف تملأ الصفحة بعد (5:11 23/11: خمسةُ صفوفٍ بطول 118 وثلثُ الصفحة تحت فاضي) */
+.list.fill{flex:1;gap:18px}
+.list.fill .row{height:auto;flex:1 1 0;min-height:118px;max-height:240px}
+.list.fill .ic{width:96px;height:96px;font-size:44px}
+.list.fill .ic.pic{width:150px;height:150px}
+.list.fill .nm .a{font-size:40px}
+.list.fill .nm .b{font-size:29px;margin-top:4px}
+.list.fill .cd{font-size:32px;padding:8px 22px}
+.list.fill.n6 .ic.pic{width:124px;height:124px}
+.list.fill.n7 .ic.pic{width:108px;height:108px}   /* ستّة وسبعة: الصورة بحجم الصفّ (≈131) ما تطلع برّاه */
+.list .ic.pic{margin-top:0}   /* 🧾 WP-1230: ‎.pic‎ في القالب الأساسيّ (صورةُ البطاقة) يعطيها 34px من فوق ⇒ كانت تنزل تحت حافّة الصفّ */
 """
 
 
@@ -146,7 +157,7 @@ def rest_html(it, pics=None):
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + TOP +
             '<h1>%s</h1><div class="sub">%s</div><div class="list%s">%s</div>'
             '<div class="foot"><span>من ترينديول %s · العروض تتغير بأي لحظة</span><span dir="ltr">@awalbawal_sa</span></div>'
-            '</body></html>') % (CSS + BIG, E(it.get("when") or "اليوم بس"), HEAD(it.get("head")), E(sub), (" big n%d" % len(rows) if len(rows) <= 4 else "") + (" haspic" if pics else ""), "".join(rows), E(day_ar(it.get("date"))))
+            '</body></html>') % (CSS + BIG, E(it.get("when") or "اليوم بس"), HEAD(it.get("head")), E(sub), (" big n%d" % len(rows) if len(rows) <= 4 else " fill n%d" % len(rows)) + (" haspic" if pics else ""), "".join(rows), E(day_ar(it.get("date"))))
 
 
 def _shoot(html_txt, name, scale=2, fill=False):
