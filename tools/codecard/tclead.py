@@ -36,6 +36,8 @@ EXTRA = """
 CSS = _BASE + EXTRA
 PCT = lambda s: re.sub(r"(\d+(?:\.\d+)?%)", r'<span class="n">\1</span>', s)
 TOP = '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول</div><div class="pill">ترينديول · <b>%s</b></div></div>'
+# ⏳ WP-1227: بلا نهايةٍ قالها الإيميل ⇒ الشارةُ «ترينديول» وحدها (الـ%s مكانُه مخفيّ فيبقى ترتيبُ المعاملات)
+TOP_PLAIN = '<div class="top"><div class="logo"><b>✓</b>العروض أول بأول</div><div class="pill">ترينديول<b style="display:none">%s</b></div></div>'
 
 
 # 🖼️ WP-1063: عنوانُ قائمة العروض — «عروض ترينديول <em>اليوم بس</em>» من الخادم (وسمُ <em> وحده مسموح) · وبلاه العنوانُ القديم لردّ الثريد
@@ -100,8 +102,10 @@ def dm(d):
 
 
 def lead_html(it, pics):
-    when = "اليوم بس" if it.get("today") else "لين " + dm(it.get("ends_on"))
+    # ⏳ WP-1227: «اليوم بس» و«لين» بس لو الإيميل كتب نهايته (said) — وإلّا الشارةُ «ترينديول» وحدها
+    when = "اليوم بس" if it.get("today") else ("لين " + dm(it.get("ends_on")) if it.get("said", True) and it.get("ends_on") else "")
     chips = []
+    # 🎁 WP-1227: عرضُ العميل («3 بسعر 2») أوّلُ شريحة وحسبتُه في العنوان
     if it.get("upto"): chips.append('<div class="chip">%s</div>' % PCT("خصم يوصل %d%%" % int(it["upto"])))
     if it.get("code") and it.get("extra"): chips.append('<div class="chip o">%s</div>' % PCT("كود %s · %d%% زيادة" % (E(it["code"]), int(it["extra"]))))
     elif it.get("code"): chips.append('<div class="chip o">كود %s</div>' % E(it["code"]))
@@ -112,10 +116,12 @@ def lead_html(it, pics):
         cells.append('<div class="cat">%s<div class="ph"><img src="%s"></div><div class="t">%s</div><div class="p">من<b>%s</b>ريال</div>%s</div>'
                      % (off, pics[i] if i < len(pics) else "", E(p.get("type")), E(num(p.get("now"))), cmp))
     bar = ('<span>وبكود <b>%s</b> تنزل أكثر</span><span>الروابط في التغريدة</span>' % E(it["code"])) if it.get("code") else '<span>الروابط في التغريدة</span><span></span>'
-    return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + TOP +
-            '<h1>%s <em>من %s ريال</em></h1><div class="chips">%s</div><div class="g3 fill n%d">%s</div><div class="bar">%s</div>'
+    return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + (TOP if when else TOP_PLAIN) +
+            '<h1>%s <em>%s</em></h1>%s<div class="chips">%s</div><div class="g3 fill n%d">%s</div><div class="bar">%s</div>'
             '<div class="foot"><span>الأسعار من ترينديول %s قبل الكود · تتغير بأي لحظة</span><span dir="ltr">@awalbawal_sa</span></div>'
-            '</body></html>') % (CSS + FILL, E(when), E(it.get("brand")), E(num(it.get("from"))),
+            '</body></html>') % (CSS + FILL, E(when), E(it.get("brand")), (E(it["offer"]) if it.get("offer") else "من %s ريال" % E(num(it.get("from")))),
+                                 # 🎁 WP-1227: حسبةُ العرض سطرٌ تحت العنوان («3 قطع بـ130 ريال بدل 300») — في العنوان نفسه كانت تطلع برّا الصورة
+                                 ('<div style="font-size:46px;font-weight:700;color:#1f1f1f;margin:-4px 0 16px">%s</div>' % E(it["math"])) if it.get("offer") and it.get("math") else "",
                                  '<div class="plus">+</div>'.join(chips), min(len(cells), 6), "".join(cells), bar, E(day_ar(it.get("date"))))
 
 

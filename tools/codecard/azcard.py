@@ -581,6 +581,23 @@ CARDS_FIT_JS = """() => {
   for (const c of ['t1', 't2']) { if (!tall()) break; document.body.classList.remove('t1'); document.body.classList.add(c); lv++; }
   return lv;
 }"""
+# ✂️ ═══ WP-1226 (قوله 2026-11-23 «١» على الحلّ الجذري) — اسمُ المنتج يصغر خطُّه لين يدخل كاملًا، لا «…» ═══
+#   قِيس 23/11: بطاقةُ «متجر اليوم: السيف غاليري» 10:11 — «ميكرويف بلت إن إديسون، 30 لتر، 1450-900…» (الخطُّ يقصّ السطر بنقاط).
+#   الاسمُ يجي من الخادم مقصوصًا عند حدّ مواصفة (lib/namesrc.js) — وهنا ما فاض عن مكانه يصغر خطُّه درجةً درجة حتى NAME_FIT_MIN،
+#   وما دخل بعدها ⇒ عيبٌ في INSPECT_JS ⇒ الصفحةُ ما تُرفع (احتياطُ WP-962 كما هو) — لا اسمَ بنقاط في صورة.
+NAME_FIT_MIN = 0.72
+NAME_FIT_JS = """(minr) => {
+  const out = [];
+  for (const e of document.querySelectorAll('.nm')) {
+    const over = () => e.scrollHeight > e.clientHeight + 0.5 || e.scrollWidth > e.clientWidth + 1;
+    if (!over()) continue;
+    const base = parseFloat(getComputedStyle(e).fontSize), min = Math.round(base * minr);
+    let s = base;
+    while (over() && s > min) { s = Math.max(min, s - 1); e.style.fontSize = s + 'px'; }
+    out.push(Math.round(s) + 'px' + (over() ? ' ✗' : ''));
+  }
+  return out;
+}"""
 # 🖼️ WP-1004: الصورةُ فوق أو جنب؟ — تُقاس مساحةُ المنتج المرسومة فعلًا (بنسبة صورته بعد القصّ) في الوضعين، ويُختار الأكبرُ للصفحة كلّها
 #   (الجزمةُ والشنطة عريضة ⇒ فوق · العطرُ والجوال طويل ⇒ جنب). بطاقاتُ الصفّ العريض (rows · span2) جنبٌ دائمًا.
 # 🖼️ ═══ WP-1208 (قوله 21 نوفمبر 2026 «٢» بعد تجميعة البقالة 15:00 نزلت بصور المنتجات) — «صغيرة» تُقاس على مكان المنتج لا على البطاقة كلّها ═══
@@ -703,6 +720,11 @@ INSPECT_JS = """(H) => {
     if (Math.round(e.scrollHeight / l) <= 2 && e.scrollHeight > e.clientHeight + 0.5) out.push('حروف مقصوصة من تحت (نقاط الياء) ' + nm(e));
   }
   for (const e of document.querySelectorAll('.sub,.subt')) if (getComputedStyle(e).overflow !== 'visible' && e.scrollHeight > e.clientHeight + 0.5) out.push('حروف مقصوصة من تحت ' + nm(e));
+  // ✂️ WP-1226: اسمُ منتجٍ ما دخل مكانه حتى بعد تصغير خطّه (NAME_FIT_JS) ⇒ كان بيطلع بنقاط «…» — عيبٌ يوقف الصفحة
+  for (const e of document.querySelectorAll('.nm')) {
+    const l = parseFloat(getComputedStyle(e).lineHeight) || 1;
+    if (e.scrollHeight > e.clientHeight + l * 0.5 || e.scrollWidth > e.clientWidth + 1) out.push('اسم منتج مقصوص بنقاط ' + nm(e));
+  }
   return [...new Set(out)];
 }"""
 
@@ -740,6 +762,8 @@ def render_az(it, scale=2):
                 lp = pgw.evaluate(LAYOUT_PICK_JS)
                 print("   📐 صفحة", pg["page"], "⇐ الصورة", "جنب" if lp["mode"] == "ph" else "فوق", ("· تضييق " + lp["t"]) if lp["t"] else "", "· مساحة المنتج: فوق", lp["pv"], "· جنب", lp["ph"], "· أصغر بطاقة", lp["min"])
             pgw.evaluate(CARDS_FIT_JS)
+            nf = pgw.evaluate(NAME_FIT_JS, NAME_FIT_MIN)   # ✂️ WP-1226: الاسمُ يصغر لين يدخل — لا «…»
+            if nf: print("   🔡 صفحة", pg["page"], "⇐ أسماء صغُر خطّها:", " · ".join(nf))
             over = pgw.evaluate(INSPECT_JS, H)
             # 🖼️ WP-1004: حارسُ «صورة صغيرة» ⇒ عيبٌ يوقف الصفحة · 🖼️ WP-1015: يُقاس بعد التضييق (ما يراه القارئ) وبالمساحة **والامتلاء** معًا
             small = []   # 🖼️ WP-1208: أرقامُ البطاقات (بترتيب منتجات الصفحة) اللي منتجُها صغيرٌ فعلًا — الخادمُ يبدّلها

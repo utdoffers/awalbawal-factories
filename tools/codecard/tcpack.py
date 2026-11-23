@@ -135,13 +135,17 @@ def render_pack(it, fetch, scale=2):
         pg.wait_for_timeout(800)
         # ✂️ العنوانُ يصغر حتى 72% ليدخل سطرًا واحدًا (درسُ WP-973: «1199 على 996 ⇒ انقصّ الرقم») — وإن ما دخل يمسكه الفحص تحت
         pg.evaluate("""() => { const h = document.querySelector('h1'); let f = 76;
-          while (h.scrollWidth > h.clientWidth + 2 && f > 55) { f -= 2; h.style.fontSize = f + 'px'; } }""")
+          while (h.scrollWidth > h.clientWidth + 2 && f > 55) { f -= 2; h.style.fontSize = f + 'px'; }
+          /* ✂️ WP-1226: الماركةُ واسمُ المنتج يصغر خطّهما لين يدخلون كاملين — لا «…» (حتى 70% من حجمهما) */
+          for (const e of document.querySelectorAll('.brand,.name')) { const b = parseFloat(getComputedStyle(e).fontSize); let g = b;
+            while (e.scrollWidth > e.clientWidth + 2 && g > b * 0.7) { g -= 1; e.style.fontSize = g + 'px'; } } }""")
         chk = pg.evaluate("""() => {
           const foot = document.querySelector('.foot').getBoundingClientRect().bottom;
           const h1 = document.querySelector('h1'); const wide = h1.scrollWidth > h1.clientWidth + 2;
           const cut = [...document.querySelectorAll('.card')].filter(c => { const r = c.getBoundingClientRect(), k = c.querySelector('.code').getBoundingClientRect(); return k.bottom > r.bottom - 4; }).length;
           const broken = [...document.images].filter(i => !i.complete || !i.naturalWidth).length;
-          return {foot, wide, cut, broken};
+          const name = [...document.querySelectorAll('.brand,.name')].filter(e => e.scrollWidth > e.clientWidth + 2).length;   // ✂️ WP-1226
+          return {foot, wide, cut, broken, name};
         }""")
         png = pg.screenshot(clip={"x": 0, "y": 0, "width": W, "height": H})
         b.close()
@@ -150,6 +154,7 @@ def render_pack(it, fetch, scale=2):
     elif chk["wide"]: why = "العنوانُ أعرض من الصفحة"
     elif chk["cut"]: why = "%d بطاقة كودها طالع برّا" % chk["cut"]
     elif chk["broken"]: why = "%d صورة ما انرسمت" % chk["broken"]
+    elif chk.get("name"): why = "%d اسم مقصوص بنقاط في سطره" % chk["name"]   # ✂️ WP-1226: لا رفع لاسمٍ بـ«…»
     im = Image.open(io.BytesIO(png)).convert("RGB")
     if im.size != (W * scale, H * scale): why = why or "المقاس %dx%d لا %dx%d" % (im.size[0], im.size[1], W * scale, H * scale)
     for q in (86, 80, 72, 64):
