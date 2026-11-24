@@ -118,7 +118,8 @@ def lead_html(it, pics):
     chips = []
     # 🎁 WP-1227: عرضُ العميل («3 بسعر 2») أوّلُ شريحة وحسبتُه في العنوان
     if it.get("upto"): chips.append('<div class="chip">%s</div>' % PCT("خصم يوصل %d%%" % int(it["upto"])))
-    if it.get("code") and it.get("extra"): chips.append('<div class="chip o">%s</div>' % PCT("كود %s · %d%% زيادة" % (E(it["code"]), int(it["extra"]))))
+    # 🔗 WP-1235: «20% زيادة» تنقرأ إنّ السعر يزيد ⇒ «خصم إضافي 20%»
+    if it.get("code") and it.get("extra"): chips.append('<div class="chip o">%s</div>' % PCT("كود %s · خصم إضافي %d%%" % (E(it["code"]), int(it["extra"]))))
     elif it.get("code"): chips.append('<div class="chip o">كود %s</div>' % E(it["code"]))
     cells = []
     for i, p in enumerate(it.get("items") or []):
@@ -126,7 +127,8 @@ def lead_html(it, pics):
         cmp = ('<div class="c">%s</div>' % E(p["cmp"])) if p.get("cmp") else ""   # 🏷️ WP-1193 (D-446)
         cells.append('<div class="cat">%s<div class="ph"><img src="%s"></div><div class="t">%s</div><div class="p">من<b>%s</b>ريال</div>%s</div>'
                      % (off, pics[i] if i < len(pics) else "", E(p.get("type")), E(num(p.get("now"))), cmp))
-    bar = ('<span>وبكود <b>%s</b> تنزل أكثر</span><span>الروابط في التغريدة</span>' % E(it["code"])) if it.get("code") else '<span>الروابط في التغريدة</span><span></span>'
+    lk = "الرابط في التغريدة" if int(it.get("links") or 0) == 1 else "الروابط في التغريدة"   # 🔗 WP-1235: رابطٌ واحد ⇒ «الرابط»
+    bar = ('<span>وبكود <b>%s</b> تنزل أكثر</span><span>%s</span>' % (E(it["code"]), lk)) if it.get("code") else '<span>%s</span><span></span>' % lk
     return ('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>%s</style></head><body>' + (TOP if when else TOP_PLAIN) +
             '<h1>%s <em>%s</em></h1>%s<div class="chips">%s</div><div class="g3 fill n%d">%s</div><div class="bar">%s</div>'
             '<div class="foot"><span>الأسعار من ترينديول %s قبل الكود · تتغير بأي لحظة</span><span dir="ltr">@awalbawal_sa</span></div>'
@@ -141,7 +143,7 @@ def rest_html(it, pics=None):
     rows = []
     for i, r in enumerate(it.get("rows") or []):
         if r.get("upto") and r.get("extra"): b = "خصم يوصل <em>%d%%</em> + %d%% بالكود" % (int(r["upto"]), int(r["extra"]))
-        elif r.get("extra"): b = "%d%% زيادة بالكود" % int(r["extra"])
+        elif r.get("extra"): b = "خصم إضافي %d%% بالكود" % int(r["extra"])   # 🔗 WP-1235: كان «20% زيادة بالكود»
         elif r.get("upto"): b = "خصم يوصل <em>%d%%</em>" % int(r["upto"])
         else: b = "عروض اليوم"
         if r.get("until"): b += " · لين " + dm(r["until"])
