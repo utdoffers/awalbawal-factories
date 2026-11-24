@@ -70,7 +70,9 @@ def one(route, todo, upload, icon, pre):
             open(os.path.join("out", f"{pre}_{str(it.get('sig') or '')[:6]}_{page}.jpg" if len(todo_items) > 1 else f"{pre}_{page}.jpg"), "wb").write(jpg)
             say("   🖌️", tag, "(جافّ)"); continue
         # 🖼️ WP-1005: بطاقةُ المخلوطة ترفع خانتَها (am · pm) — والبقيّةُ كما كانت حرفًا
-        st2, r = upload({"sig": it["sig"], "page": page, "jpg": base64.b64encode(jpg).decode(), **({"slot": it["slot"]} if it.get("slot") else {})})
+        # 🧽 WP-1234: موديلاتُ الدليل اللي ما لقت صورةً بلا كتابة تُبلَّغ مع الرفع (الخادمُ يكتبها ملاحظةً والجرسُ يرن وقت النشر)
+        st2, r = upload({"sig": it["sig"], "page": page, "jpg": base64.b64encode(jpg).decode(), **({"slot": it["slot"]} if it.get("slot") else {}),
+                         **({"dirty": it["_dirty"]} if it.get("_dirty") else {})})
         if st2 == 200 and r.get("ok"): up += 1; say("   ✅", tag)
         else: fail += 1; say("   ❌", tag, st2, r.get("why") or r)
     say(f"🧾 {route}: رُفعت {up} · فشلت {fail}")

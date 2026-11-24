@@ -58,6 +58,8 @@ jobs:
         timeout-minutes: 12   # 🏭 WP-1037: سقفٌ للخطوة (أسوأ حالات ci-chromium.sh ٩ دقائق · العادي أقل من دقيقة)
         run: |
           pip install --quiet "Pillow>=10" playwright
+          # 🧽 WP-1234: قارئُ الكتابة الآليّ لصور دليل الشراء (rapidocr بنسخة opencv بلا شاشة — ما يحتاج مكتبات أوبونتو) · فشلُه ما يوقف المصنع (القصُّ القديم يكمل)
+          pip install --quiet opencv-python-headless onnxruntime pyclipper shapely pyyaml six tqdm numpy && pip install --quiet --no-deps rapidocr_onnxruntime || echo "🧽 القارئ الآلي ما تركّب — القص القديم"
           bash tools/ci-chromium.sh   # 🏭 WP-1037: playwright install بمهلةٍ وإعادة — 11/11 علّق ١٠ د وطاح لمّا apt ما وصل مرايا أوبونتو
       - name: رسمٌ وإيداع
         env:

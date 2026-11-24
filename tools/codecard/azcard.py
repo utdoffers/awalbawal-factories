@@ -271,20 +271,135 @@ def _uri(im):
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
+# 🧽 ═══ WP-1234 — صورةُ الدليل بلا كتابة: Claude يقول وين الجهاز والقارئُ الآليّ (OCR) يقول وين الكتابة ═══
+#   قوله 24/11 «٢» على «تصليح جذري ولا بترقع؟» · قاعدتُه Q1215 «تصميم gd1 بصورة بلا كتابة».
+#   قِيس دليلُ المكانس 23/11: كلُّ صور متجر ABIR فيها كتابة والأولى عليها أكوادُ المتجر (GCCSF15 · KSA888 · SAK300) وبنر «صفقات سوبر»،
+#   ومربّعُ Claude تقريبيّ (VC205 [24,3,76,85] · K30 [22,19,97,81] دخلت فيهما الأكواد) — وبرومبتٌ أشدّ ما ضبط مربّعاته.
+#   وجُرّب «أكثرُ صورةٍ بقي منها بعد الكتابة» فاختار رسومًا بلا الجهاز (مسار WD8 · لقطة WD9 المكبّرة) ⇒ الجهازُ يحدّده Claude والكتابةُ يحدّدها القارئ:
+#   القصُّ يبدأ واسعًا حول مربّع الجهاز وينكمش بعيدًا عن كلِّ كتابة (ماركتُه وموديلُه المطبوعان عليه مسموحان) من الجهة اللي **تحفظ الجهاز**،
+#   ويُقبل لو بقي من الجهاز DEV_KEEP — وإلّا صورةُ Claude البديلة (alts). ما لقى ⇒ القصُّ القديم واسمُه يُبلَّغ الخادم (dirty ⇒ الجرس).
+_OCR = None
+DEV_KEEP = 0.80      # أقلُّ ما يبقى من مربّع الجهاز بعد شيل الكتابة (أقلّ ⇒ تنزل نظيفة ويُبلَّغ)
+DEV_FLOOR = 0.40     # تحته الجهازُ نفسُه راح ⇒ القصُّ القديم ويُبلَّغ (المراجعُ الثاني: لا صورةَ بجزءٍ صغيرٍ من الجهاز)
+OUT_PAD = 0.06       # كم يتّسع القصُّ حول مربّع الجهاز قبل الانكماش (مربّعُ Claude تقريبيّ)
+
+
+def _ocr():
+    global _OCR
+    if _OCR is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            _OCR = RapidOCR(text_score=0.0)   # كلُّ منطقة كتابة تنكشف ولو ما انقرت (قِيس 24/11: العربيُّ يجي بثقة 0.25–0.48 فالافتراضيّ 0.5 أسقط «صفقات سوبر»)
+        except Exception as e:  # بلا القارئ ⇒ القصُّ كما كان (ولا يُدّعى «نظيف»)
+            print("   🧽 القارئُ الآليّ ما اشتغل:", repr(e)[:80]); _OCR = False
+    return _OCR or None
+
+
+def keep_words(*names):
+    """كلماتُ الجهاز المسموحةُ على صورته — الماركة والموديل اللاتينيّة (ABIR · K30 · WD8). نقيّة."""
+    out = set()
+    for n in names:
+        for w in re.findall(r"[A-Za-z0-9][A-Za-z0-9\-]{2,}", str(n or "")):
+            out.add(re.sub(r"[^A-Za-z0-9]", "", w).upper())
+    return {w for w in out if len(w) >= 3}
+
+
+def text_boxes(im, keep=()):
+    """مناطقُ الكتابة في الصورة (بكسل) — بلا ماركة الجهاز وموديله. None ⇒ القارئُ ما اشتغل."""
+    eng = _ocr()
+    if not eng: return None
+    import numpy as np
+    res, _ = eng(np.array(im.convert("RGB")), use_cls=False)
+    out = []
+    for b, t, _s in (res or []):
+        tt = re.sub(r"[^A-Za-z0-9]", "", str(t or "")).upper()
+        if tt and len(tt) >= 3 and any(tt == k or (len(tt) >= 4 and (tt in k or k in tt)) for k in keep): continue
+        xs = [p[0] for p in b]; ys = [p[1] for p in b]
+        out.append((min(xs), min(ys), max(xs), max(ys)))
+    return out
+
+
+def _ov(a, b):
+    return max(0.0, min(a[2], b[2]) - max(a[0], b[0])) * max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+
+
+def shrink_keep(S, D, T, W, H, pad=0.025):
+    """ينكمش S بعيدًا عن كلِّ منطقة كتابة في T — كلَّ مرّة من الجهة اللي **تحفظ أكثر من مربّع الجهاز D** (ثمّ الأوسع).
+    ⇒ (المربّع, كم بقي من الجهاز 0–1) أو (None, 0). نقيّة."""
+    x0, y0, x1, y1 = S
+    DA = max(1.0, (D[2] - D[0]) * (D[3] - D[1])); m = pad * max(W, H)
+    for _ in range(60):
+        hit = [t for t in T if t[2] > x0 and t[0] < x1 and t[3] > y0 and t[1] < y1]
+        if not hit: break
+        t = max(hit, key=lambda t: _ov(t, D))   # الكتابةُ اللي على الجهاز أوّلًا (أصعبُها)
+        opts = [(max(x0, t[2] + m), y0, x1, y1), (x0, y0, min(x1, t[0] - m), y1), (x0, max(y0, t[3] + m), x1, y1), (x0, y0, x1, min(y1, t[1] - m))]
+        opts = [o for o in opts if o[2] - o[0] > 0.1 * W and o[3] - o[1] > 0.1 * H]
+        if not opts: return None, 0.0
+        x0, y0, x1, y1 = max(opts, key=lambda o: (_ov(o, D), (o[2] - o[0]) * (o[3] - o[1])))
+    else:
+        return None, 0.0
+    R = (x0, y0, x1, y1)
+    if any(t[2] > x0 and t[0] < x1 and t[3] > y0 and t[1] < y1 for t in T): return None, 0.0
+    return R, _ov(R, D) / DA
+
+
+def clean_crop(im, box, keep=()):
+    """(صورةٌ مقصوصةٌ بلا كتابة أو None, السبب, كم بقي من الجهاز). القارئُ ما اشتغل ⇒ (None, "بلا قارئ", 0)."""
+    rgb = im.convert("RGB"); w, h = rgb.size
+    T = text_boxes(rgb, keep)
+    if T is None: return None, "بلا قارئ", 0.0
+    if box:
+        D = tuple(float(v) / 100 * (w if i % 2 == 0 else h) for i, v in enumerate(box))
+    else:
+        from PIL import ImageChops, Image
+        bb = ImageChops.difference(rgb, Image.new("RGB", rgb.size, (255, 255, 255))).convert("L").point(lambda x: 255 if x > 22 else 0).getbbox()
+        D = tuple(float(v) for v in (bb or (0, 0, w, h)))
+    px, py = OUT_PAD * w, OUT_PAD * h
+    S = (max(0.0, D[0] - px), max(0.0, D[1] - py), min(float(w), D[2] + px), min(float(h), D[3] + py))
+    R, kept = shrink_keep(S, D, T, w, h)
+    if not R: return None, "الكتابة محاوطة الجهاز", 0.0
+    return rgb.crop(tuple(int(round(v)) for v in R)), None, kept
+
+
 def prep_guide_imgs(it, get=_img_get, say=print):
-    """لكلِّ موديل: اختيارُ Claude (pic: صورة + مربّع) يُقصّ · وإلّا الأولى كما هي."""
+    """لكلِّ موديل: صورُ Claude بالترتيب (pic ثمّ pic.alts) ⇐ القارئُ يشيل الكتابة محافظًا على الجهاز ⇐ أوّلُ وحدة بقي منها DEV_KEEP.
+    ما لقى ⇒ الأحسنُ لو بقي منه النصّ · وإلّا القصُّ القديم واسمُه في it["_dirty"] (يُبلَّغ الخادم مع الرفع). يرجع القائمة.
+    موديلٌ بلا اختيار Claude (دليلُ أمازون) ⇒ كما كان حرفًا."""
     from PIL import Image
+    dirty = []
     for pg in it.get("pages") or []:
         for p in pg.get("items") or []:
+            nm = str(p.get("name") or "")[:30]
             pic = p.get("pic") or {}
-            if pic.get("u"):
+            cands = ([(pic["u"], pic.get("box"))] if pic.get("u") else []) + [(a.get("u"), a.get("box")) for a in (pic.get("alts") or []) if a.get("u")]
+            if not cands:
+                say("   🖼️", nm, "⇐ الصورة الأولى (بلا اختيار Claude)"); continue
+            keep = keep_words(p.get("name"), p.get("brand"))
+            first = None; best = None; noocr = False
+            for k, (u, bx) in enumerate(cands[:3]):
                 try:
-                    im = Image.open(io.BytesIO(get(pic["u"]))); im.load()
-                    p["img"] = _uri(crop_box(im, pic["box"]) if pic.get("box") else crop_white(im))
-                    say("   🖼️", str(p.get("name"))[:30], "⇐ اختيار Claude", "بمربّع" if pic.get("box") else "بلا مربّع"); continue
+                    im = Image.open(io.BytesIO(get(u))); im.load()
                 except Exception as e:
-                    say("   🖼️", str(p.get("name"))[:30], "⇐ صورة Claude ما نزلت:", repr(e)[:60])
-            say("   🖼️", str(p.get("name"))[:30], "⇐ الصورة الأولى (بلا اختيار Claude)")
+                    say("   🖼️", nm, "⇐ صورة ما نزلت:", repr(e)[:60]); continue
+                if first is None: first = crop_box(im, bx) if bx else crop_white(im)
+                c, why, kept = clean_crop(im, bx, keep)
+                if why == "بلا قارئ": noocr = True; break
+                say("   🔎", nm, "· صورة", k, "·", ("بقي من الجهاز %d%%" % round(kept * 100)) if c is not None else why)
+                if c is not None and (best is None or kept > best[1]): best = (c, kept, k)
+                if best and best[1] >= DEV_KEEP: break
+            if best and best[1] >= DEV_FLOOR:
+                p["img"] = _uri(best[0])
+                say("   🧽", nm, "⇐ صورة", best[2], "بلا كتابة · بقي من الجهاز %d%%" % round(best[1] * 100))
+                # ملاحظةُ المراجع: جزءٌ من الجهاز انقصّ ⇒ ما ينزل بصمت — يُبلَّغ (الجرس) ولو الصورةُ بلا كتابة
+                if best[1] < DEV_KEEP: dirty.append("%s (بقي %d%% من الجهاز)" % (nm, round(best[1] * 100)))
+                continue
+            if first is not None: p["img"] = _uri(first)
+            if noocr:   # المراجعُ الثاني: القارئُ ما تركّب ⇒ ما ينزل بصمت — يُبلَّغ
+                dirty.append("%s (بلا فحص كتابة — القارئ ما اشتغل)" % nm); say("   ⚠️", nm, "⇐ القصُّ القديم بلا فحص كتابة (القارئ ما اشتغل) — والخادمُ يدري"); continue
+            if first is not None:
+                dirty.append(nm); say("   ⚠️", nm, "⇐ ما لقيت قصًّا بلا كتابة يحفظ الجهاز — القصُّ القديم والخادمُ يدري")
+    it["_dirty"] = dirty
+    return dirty
 
 
 
