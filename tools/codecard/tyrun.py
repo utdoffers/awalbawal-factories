@@ -12,35 +12,73 @@ from run import api, api_post, fetch_img, say
 
 DRY = "--dry" in sys.argv
 
+# 🔁 WP-1245 (طلبه 2026-11-25 «افتح سجل التشغيلة وصلّح المصنع»): قِيس 101 تشغيلة من 17/11 — 3 «فشلت» وما ضاع تصميم:
+#   مرّتين ردّ الرفع 409 «البصمةُ تغيّرت أثناء الرسم — تُعاد في الدورة القادمة» (23/11 12:15 و 24/11 00:35 رياض)
+#   ومرّة 500 «D1_ERROR: Network connection lost» (20/11 09:14) — وكلُّها رسمتها إعادةُ النداء (WP-1037) بعد 6–7 دقايق.
+#   فالـ409 ما عاد «فشل»: يُسحب todo من جديد ويُرسم اللي تغيّر في نفس التشغيلة (ROUNDS جولات)، والـ5xx/الانقطاع يُعاد رفعُه مرّة.
+#   وإن ما ثبتت البصمةُ بعد آخر جولة ⇒ تطلع «فشل» كما كانت، عشان حارسُ إعادة النداء (lib/nidaa.js) يرجّعها — شبكةُ الأمان باقية.
+STALE = []                 # ما ردّ 409 في الجولة الحاليّة
+ROUNDS = 3                 # جولةٌ أولى + إعادتان
+WAIT_S = (30, 60)          # الانتظارُ قبل الإعادة الأولى ثمّ الثانية (ثوانٍ)
+UP_RETRY_S = 10            # الانتظارُ قبل إعادة رفعٍ ردّ 5xx أو انقطع
+
+def upload(send, tag):
+    """رفعٌ واحد — `send` نداءُ api_post نفسُه (بمساره مكتوبًا عند المنادي: حارسُ test_wp360 يقرأ الأبواب من نصّ الملفّ) ⇒ (حكم, st, r): True رُفع · None البصمةُ تغيّرت (يُسجَّل في STALE — لا فشل) · False فشلٌ حقيقيّ.
+    5xx أو انقطاع ⇒ إعادةٌ مرّةً واحدة بعد UP_RETRY_S."""
+    for n in (1, 2):
+        try:
+            st2, r = send()
+        except Exception as e:
+            st2, r = 0, {"why": repr(e)[:160]}
+        r = r if isinstance(r, dict) else {}
+        if st2 == 200 and r.get("ok"): return True, st2, r
+        if st2 == 409: STALE.append(tag); return None, st2, r
+        if n == 1 and (st2 == 0 or st2 >= 500):
+            say("   ↻", tag, st2, str(r.get("why") or r.get("error") or "")[:120], f"— أعيد الرفع بعد {UP_RETRY_S} ث")
+            time.sleep(UP_RETRY_S); continue
+        return False, st2, r
+
 def main():
     # WP-732(٩): متى ولماذا شُغّل (والعنوانُ يصل مبسَّطًا: بلا حروفٍ تركيّة لا يرسمها الخطّ) — قِيس 2026-10-16 أنّ البطاقة رُسمت 18:33 رياضًا والمنشورُ 16:00 (جدولةُ GitHub تتأخّر)
     say(f"⏱️ {time.strftime('%Y-%m-%d %H:%M:%SZ', time.gmtime())} · {os.environ.get('GITHUB_EVENT_NAME', 'local')} · {os.environ.get('GITHUB_EVENT_SCHEDULE', '')}")
-    tb_ok = brands()
-    st, t = api("/api/tycamp/cards/todo")
-    if st != 200 or not t.get("ok"):
-        say("⛔ tycamp/cards/todo ردّ", st, t); sys.exit(0 if tb_ok else 1)
-    th_ok = thread_cards(t.get("lead"), t.get("rest"))   # 🧵 WP-986: صورتا الثريد أوّلًا — هما اللي تنزلان يوم فيه ماركةُ اليوم
-    td_ok = td_cards(t.get("td") or [])   # 🖼️ WP-1063: خاناتُ يوم ترينديول (7:30 · 8:30 · 1:30 · 5:00)
-    pk_ok = pack(t.get("pack"))   # 🧡 WP-980: صورةُ التجميعة — تنزل يوم بلا ماركة اليوم
-    items = t.get("items") or []
-    need = [i for i in items if not i.get("fresh")]
-    say(f"🟠 حملات اليوم بمنتج: {len(items)} · تحتاج رسمًا: {len(need)} · التصميم {t.get('layout')}")
-    up = fail = 0
-    for it in need:
-        p = fetch_img(it.get("img"))
-        if p is None:
-            fail += 1; say("   ❌", it.get("store"), "صورةُ المنتج لم تُنزَّل — لا بطاقة"); continue
-        jpg = render_ty(it, product=p)
-        tag = f"{it.get('store')} · {it.get('now')}/{it.get('was')}"
-        if DRY:
-            os.makedirs("out", exist_ok=True)
-            open(os.path.join("out", "ty_" + str(abs(hash(it["cid"]))) + ".jpg"), "wb").write(jpg)
-            say("   🖌️", tag, f"{len(jpg)//1024}KB (جافّ)"); continue
-        st2, r = api_post("/api/tycamp/cards/upload", {"cid": it["cid"], "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()})
-        if st2 == 200 and r.get("ok"): up += 1; say("   ✅", tag, f"{len(jpg)//1024}KB")
-        else: fail += 1; say("   ❌", tag, st2, r.get("why") or r)
-        time.sleep(0.3)
+    up = 0
+    for rnd in range(1, ROUNDS + 1):   # 🔁 WP-1245: الجولةُ الثانية والثالثة ترسم بس اللي ما صار «fresh» (اللي انرفع يرجع fresh من todo)
+        del STALE[:]
+        tb_ok = brands()
+        st, t = api("/api/tycamp/cards/todo")
+        if st != 200 or not t.get("ok"):
+            # 🔁 WP-1245 (المراجع ⚠️): في جولة إعادة = فيه 409 ما انرسم ⇒ فشل عشان إعادة النداء ترجّعها (لا نجاح كاذب)
+            say("⛔ tycamp/cards/todo ردّ", st, t); sys.exit(0 if (tb_ok and not STALE and rnd == 1) else 1)
+        th_ok = thread_cards(t.get("lead"), t.get("rest"))   # 🧵 WP-986: صورتا الثريد أوّلًا — هما اللي تنزلان يوم فيه ماركةُ اليوم
+        td_ok = td_cards(t.get("td") or [])   # 🖼️ WP-1063: خاناتُ يوم ترينديول (7:30 · 8:30 · 1:30 · 5:00)
+        pk_ok = pack(t.get("pack"))   # 🧡 WP-980: صورةُ التجميعة — تنزل يوم بلا ماركة اليوم
+        items = t.get("items") or []
+        need = [i for i in items if not i.get("fresh")]
+        say(f"🟠 حملات اليوم بمنتج: {len(items)} · تحتاج رسمًا: {len(need)} · التصميم {t.get('layout')}")
+        fail = 0
+        for it in need:
+            p = fetch_img(it.get("img"))
+            if p is None:
+                fail += 1; say("   ❌", it.get("store"), "صورةُ المنتج لم تُنزَّل — لا بطاقة"); continue
+            jpg = render_ty(it, product=p)
+            tag = f"{it.get('store')} · {it.get('now')}/{it.get('was')}"
+            if DRY:
+                os.makedirs("out", exist_ok=True)
+                open(os.path.join("out", "ty_" + str(abs(hash(it["cid"]))) + ".jpg"), "wb").write(jpg)
+                say("   🖌️", tag, f"{len(jpg)//1024}KB (جافّ)"); continue
+            res, st2, r = upload(lambda: api_post("/api/tycamp/cards/upload", {"cid": it["cid"], "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()}), tag)
+            if res: up += 1; say("   ✅", tag, f"{len(jpg)//1024}KB")
+            elif res is None: say("   🔁", tag, st2, r.get("why") or r)
+            else: fail += 1; say("   ❌", tag, st2, r.get("why") or r)
+            time.sleep(0.3)
+        if not STALE: break
+        if rnd < ROUNDS:
+            w = WAIT_S[min(rnd - 1, len(WAIT_S) - 1)]
+            say(f"🔁 البصمةُ تغيّرت أثناء رسم {' · '.join(STALE)} — أسحب من جديد وأرسم بعد {w} ث (جولة {rnd + 1}/{ROUNDS})")
+            time.sleep(w)
     say(f"🧾 رُسمت ورُفعت {up} · فشلت {fail}")
+    if STALE:
+        say(f"⚠️ البصمةُ ما ثبتت بعد {ROUNDS} جولات ({' · '.join(STALE)}) — أطلع «فشل» عشان إعادةُ النداء ترجّعها"); sys.exit(1)
     if (fail and not up) or not pk_ok or not th_ok or not td_ok: sys.exit(1)
 
 def td_cards(items):
@@ -64,8 +102,9 @@ def td_cards(items):
         if DRY:
             os.makedirs("out", exist_ok=True); open(os.path.join("out", f"{cid}.jpg"), "wb").write(jpg)
             say(f"   🖌️ 🖼️ {cid}", tag, f"{len(jpg)//1024}KB (جافّ)"); continue
-        st2, r = api_post("/api/tycamp/cards/upload", {"cid": cid, "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()})
-        if st2 == 200 and r.get("ok"): say(f"   ✅ 🖼️ {cid}", tag, f"{len(jpg)//1024}KB")
+        res, st2, r = upload(lambda: api_post("/api/tycamp/cards/upload", {"cid": cid, "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()}), f"🖼️ {cid}")
+        if res: say(f"   ✅ 🖼️ {cid}", tag, f"{len(jpg)//1024}KB")
+        elif res is None: say(f"   🔁 🖼️ {cid}", tag, st2, r.get("why") or r)
         else: say(f"   ❌ 🖼️ {cid}", tag, st2, r.get("why") or r); ok = False
     return ok
 
@@ -89,8 +128,9 @@ def thread_cards(lead, rest):
         if DRY:
             os.makedirs("out", exist_ok=True); open(os.path.join("out", f"tc{cid}.jpg"), "wb").write(jpg)
             say(f"   🖌️ 🧵 {cid}", tag, f"{len(jpg)//1024}KB (جافّ)"); continue
-        st2, r = api_post("/api/tycamp/cards/upload", {"cid": cid, "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()})
-        if st2 == 200 and r.get("ok"): say(f"   ✅ 🧵 {cid}", tag, f"{len(jpg)//1024}KB")
+        res, st2, r = upload(lambda: api_post("/api/tycamp/cards/upload", {"cid": cid, "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()}), f"🧵 {cid}")
+        if res: say(f"   ✅ 🧵 {cid}", tag, f"{len(jpg)//1024}KB")
+        elif res is None: say(f"   🔁 🧵 {cid}", tag, st2, r.get("why") or r)
         else: say(f"   ❌ 🧵 {cid}", tag, st2, r.get("why") or r); ok = False
     return ok
 
@@ -109,8 +149,9 @@ def pack(it):
     if DRY:
         os.makedirs("out", exist_ok=True); open(os.path.join("out", "tcpack.jpg"), "wb").write(jpg)
         say("   🖌️ 🧡", tag, f"{len(jpg)//1024}KB (جافّ)"); return True
-    st2, r = api_post("/api/tycamp/cards/upload", {"cid": "pack", "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()})
-    if st2 == 200 and r.get("ok"): say("   ✅ 🧡", tag, f"{len(jpg)//1024}KB"); return True
+    res, st2, r = upload(lambda: api_post("/api/tycamp/cards/upload", {"cid": "pack", "sig": it["sig"], "jpg": base64.b64encode(jpg).decode()}), "🧡 التجميعة")
+    if res: say("   ✅ 🧡", tag, f"{len(jpg)//1024}KB"); return True
+    if res is None: say("   🔁 🧡", tag, st2, r.get("why") or r); return True   # 🔁 WP-1245: STALE تعيد الجولة
     say("   ❌ 🧡", tag, st2, r.get("why") or r); return False
 
 def brands():
@@ -130,8 +171,9 @@ def brands():
     if DRY:
         os.makedirs("out", exist_ok=True); open(os.path.join("out", "tybrands.jpg"), "wb").write(jpg)
         say("   🖌️", tag, f"{len(jpg)//1024}KB (جافّ)"); return True
-    st2, r = api_post("/api/tybrands/card/upload", {"sig": it["sig"], "jpg": base64.b64encode(jpg).decode()})
-    if st2 == 200 and r.get("ok"): say("   ✅ 🏷️", tag, f"{len(jpg)//1024}KB"); return True
+    res, st2, r = upload(lambda: api_post("/api/tybrands/card/upload", {"sig": it["sig"], "jpg": base64.b64encode(jpg).decode()}), "🏷️ الماركات")
+    if res: say("   ✅ 🏷️", tag, f"{len(jpg)//1024}KB"); return True
+    if res is None: say("   🔁 🏷️", tag, st2, r.get("why") or r); return True   # 🔁 WP-1245: STALE تعيد الجولة
     say("   ❌ 🏷️", tag, st2, r.get("why") or r); return False
 
 if __name__ == "__main__":
