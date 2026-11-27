@@ -142,7 +142,8 @@ def rest_html(it, pics=None):
     # 🖼️ WP-1089: الشارةُ فوق من الخادم (it["when"]: «اليوم بس» أو تاريخُ اليوم) — كانت «اليوم بس» ثابتة على كلِّ قائمة
     rows = []
     for i, r in enumerate(it.get("rows") or []):
-        if r.get("upto") and r.get("extra"): b = "خصم يوصل <em>%d%%</em> + %d%% بالكود" % (int(r["upto"]), int(r["extra"]))
+        # 🧾 WP-1266: «+ 20% بالكود» ⇒ «+ خصم إضافي 20% بالكود» — نفسُ كلمة التغريدة (tcCodeTxt · Q1969)
+        if r.get("upto") and r.get("extra"): b = "خصم يوصل <em>%d%%</em> + خصم إضافي %d%% بالكود" % (int(r["upto"]), int(r["extra"]))
         elif r.get("extra"): b = "خصم إضافي %d%% بالكود" % int(r["extra"])   # 🔗 WP-1235: كان «20% زيادة بالكود»
         elif r.get("upto"): b = "خصم يوصل <em>%d%%</em>" % int(r["upto"])
         else: b = "عروض اليوم"
